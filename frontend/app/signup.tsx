@@ -12,19 +12,23 @@ import {
   ScrollView,
   StatusBar,
   Animated,
+  ActivityIndicator,
 } from "react-native";
 import { router } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:3000/api";
 export default function SignupScreen() {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [usernameError, setUsernameError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const shakeAnimation = useRef(new Animated.Value(0)).current;
-
-  const takenUsernames = ["admin", "doga", "testuser", "john"];
 
   const shakeError = () => {
     Animated.sequence([
@@ -66,42 +70,89 @@ export default function SignupScreen() {
     ]).start();
   };
 
-  const handleSignup = () => {
-    const cleanedUsername = username.trim().toLowerCase();
+  const clearErrors = () => {
     setUsernameError("");
+    setEmailError("");
+  };
 
-    if (!email || !username || !password || !confirmPassword) {
-      Alert.alert("Error", "Please fill in all fields.");
+  const handleSignup = async () => {
+    const cleanedEmail = email.trim().toLowerCase();
+    const cleanedUsername = username.trim().toLowerCase();
+
+    clearErrors();
+
+    if (!cleanedEmail || !cleanedUsername || !password || !confirmPassword) {
+      Alert.alert("Error", "All fields are required.");
       return;
     }
 
-    if (!email.includes("@")) {
-      Alert.alert("Error", "Please enter a valid email address.");
-      return;
-    }
+    try {
+      setLoading(true);
 
-    if (cleanedUsername.length < 3) {
-      Alert.alert("Error", "Username must be at least 3 characters.");
-      return;
-    }
+      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: cleanedEmail,
+          username: cleanedUsername,
+          password,
+          confirmPassword,
+        }),
+      });
 
-    if (password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters.");
-      return;
-    }
+      const data = await response.json();
 
-    if (password !== confirmPassword) {
-      Alert.alert("Error", "Passwords do not match.");
-      return;
-    }
+      if (response.status === 201) {
+        await AsyncStorage.setItem("token", data.token);
+        await AsyncStorage.setItem("user", JSON.stringify(data.user));
 
-    if (takenUsernames.includes(cleanedUsername)) {
-      setUsernameError("This username is already taken.");
-      shakeError();
-      return;
-    }
+        Alert.alert("Success", data.message || "User created successfully.");
+        router.replace("/");
+        return;
+      }
 
-    Alert.alert("Success", "Signup form is ready.");
+      if (response.status === 400) {
+        Alert.alert("Error", data.message || "Invalid input.");
+        return;
+      }
+
+      if (response.status === 409) {
+        if (data.message === "Username is already taken.") {
+          setUsernameError(data.message);
+          shakeError();
+          return;
+        }
+
+        if (data.message === "Email is already in use.") {
+          setEmailError(data.message);
+          shakeError();
+          return;
+        }
+
+        Alert.alert(
+          "Error",
+          data.message || "Username or email already exists."
+        );
+        return;
+      }
+
+      if (response.status === 500) {
+        Alert.alert("Error", data.message || "Server error during signup.");
+        return;
+      }
+
+      Alert.alert(
+        "Error",
+        data.message || "Something went wrong during signup."
+      );
+    } catch (error) {
+      console.error("Signup error:", error);
+      Alert.alert("Error", "Could not connect to the server.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -129,9 +180,25 @@ export default function SignupScreen() {
               placeholderTextColor="#7A7A7A"
               keyboardType="email-address"
               autoCapitalize="none"
+              autoCorrect={false}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(text) => {
+                setEmail(text);
+                if (emailError) setEmailError("");
+              }}
+              editable={!loading}
             />
+
+            {emailError ? (
+              <Animated.Text
+                style={[
+                  styles.errorText,
+                  { transform: [{ translateX: shakeAnimation }] },
+                ]}
+              >
+                {emailError}
+              </Animated.Text>
+            ) : null}
 
             <Text style={styles.label}>Username</Text>
             <TextInput
@@ -139,11 +206,13 @@ export default function SignupScreen() {
               placeholder="Choose a username"
               placeholderTextColor="#7A7A7A"
               autoCapitalize="none"
+              autoCorrect={false}
               value={username}
               onChangeText={(text) => {
                 setUsername(text);
                 if (usernameError) setUsernameError("");
               }}
+              editable={!loading}
             />
 
             {usernameError ? (
@@ -165,7 +234,13 @@ export default function SignupScreen() {
               secureTextEntry
               value={password}
               onChangeText={setPassword}
+              editable={!loading}
             />
+
+            <Text style={styles.passwordHint}>
+              Must be at least 8 characters and include 1 uppercase letter, 1
+              number, and 1 special character.
+            </Text>
 
             <Text style={styles.label}>Confirm Password</Text>
             <TextInput
@@ -175,13 +250,25 @@ export default function SignupScreen() {
               secureTextEntry
               value={confirmPassword}
               onChangeText={setConfirmPassword}
+              editable={!loading}
             />
 
-            <TouchableOpacity style={styles.button} onPress={handleSignup}>
-              <Text style={styles.buttonText}>Sign Up</Text>
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleSignup}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator />
+              ) : (
+                <Text style={styles.buttonText}>Sign Up</Text>
+              )}
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => router.push("/login")}>
+            <TouchableOpacity
+              onPress={() => router.push("/login")}
+              disabled={loading}
+            >
               <Text style={styles.loginText}>
                 Already have an account?{" "}
                 <Text style={styles.loginLink}>Log in</Text>
@@ -260,12 +347,21 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontWeight: "600",
   },
+  passwordHint: {
+    color: "#8F8F8F",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 8,
+  },
   button: {
     backgroundColor: "#FFFFFF",
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: "center",
     marginTop: 26,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     color: "#000000",

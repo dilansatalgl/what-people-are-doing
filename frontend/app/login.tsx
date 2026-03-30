@@ -11,20 +11,79 @@ import {
   Platform,
   ScrollView,
   StatusBar,
+  ActivityIndicator,
 } from "react-native";
 import { router } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:3000/api";
 export default function LoginScreen() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    if (!username || !password) {
-      Alert.alert("Error", "Please fill in all fields.");
+  const handleLogin = async () => {
+    const cleanedUsername = username.trim().toLowerCase();
+
+    if (!cleanedUsername || !password) {
+      Alert.alert("Error", "Username and password are required.");
       return;
     }
 
-    Alert.alert("Success", "Login form is ready.");
+    try {
+      setLoading(true);
+
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: cleanedUsername,
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.status === 200) {
+        await AsyncStorage.setItem("token", data.token);
+        await AsyncStorage.setItem("user", JSON.stringify(data.user));
+
+        Alert.alert("Success", data.message || "Login successful.");
+        router.replace("/");
+        return;
+      }
+
+      if (response.status === 400) {
+        Alert.alert(
+          "Error",
+          data.message || "Username and password are required."
+        );
+        return;
+      }
+
+      if (response.status === 401 || response.status === 404) {
+        Alert.alert("Error", "Username or password incorrect");
+        return;
+      }
+
+      if (response.status === 500) {
+        Alert.alert("Error", data.message || "Server error during login.");
+        return;
+      }
+
+      Alert.alert(
+        "Error",
+        data.message || "Something went wrong during login."
+      );
+    } catch (error) {
+      console.error("Login error:", error);
+      Alert.alert("Error", "Could not connect to the server.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -50,8 +109,10 @@ export default function LoginScreen() {
               placeholder="Enter your username"
               placeholderTextColor="#8A8A8A"
               autoCapitalize="none"
+              autoCorrect={false}
               value={username}
               onChangeText={setUsername}
+              editable={!loading}
             />
 
             <Text style={styles.label}>Password</Text>
@@ -62,13 +123,25 @@ export default function LoginScreen() {
               secureTextEntry
               value={password}
               onChangeText={setPassword}
+              editable={!loading}
             />
 
-            <TouchableOpacity style={styles.button} onPress={handleLogin}>
-              <Text style={styles.buttonText}>Log In</Text>
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator />
+              ) : (
+                <Text style={styles.buttonText}>Log In</Text>
+              )}
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => router.push("/signup")}>
+            <TouchableOpacity
+              onPress={() => router.push("/signup")}
+              disabled={loading}
+            >
               <Text style={styles.footerText}>
                 Don’t have an account?{" "}
                 <Text style={styles.footerLink}>Sign up</Text>
@@ -147,6 +220,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     marginTop: 26,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     color: "#000000",
