@@ -18,6 +18,8 @@ const echoSchema = new mongoose.Schema(
   }
 );
 
+echoSchema.index({ post: 1 });
+
 // prevent duplicate echoes: one echo per user per post
 echoSchema.index({ user: 1, post: 1 }, { unique: true });
 
