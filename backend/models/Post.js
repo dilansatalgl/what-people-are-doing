@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { buildPostExpirationDate } = require("../config/postExpiration");
 
 const postSchema = new mongoose.Schema(
   {
@@ -38,6 +39,7 @@ const postSchema = new mongoose.Schema(
     expiresAt: {
       type: Date,
       required: true,
+      default: () => buildPostExpirationDate(),
     },
   },
   {
