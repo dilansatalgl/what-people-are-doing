@@ -2,42 +2,6 @@ const Echo = require("../models/Echo");
 const Post = require("../models/Post");
 const postExpiration = require("../config/postExpiration");
 
-const deleteOrphanedEchoes = async () => {
-  const orphanedEchoes = await Echo.aggregate([
-    {
-      $lookup: {
-        from: "posts",
-        localField: "post",
-        foreignField: "_id",
-        as: "postMatch",
-      },
-    },
-    {
-      $match: {
-        $expr: {
-          $eq: [{ $size: "$postMatch" }, 0],
-        },
-      },
-    },
-    {
-      $project: {
-        _id: 1,
-      },
-    },
-  ]);
-
-  if (orphanedEchoes.length === 0) {
-    return 0;
-  }
-
-  const orphanedEchoIds = orphanedEchoes.map(({ _id }) => _id);
-  const deletionResult = await Echo.deleteMany({
-    _id: { $in: orphanedEchoIds },
-  });
-
-  return deletionResult.deletedCount || 0;
-};
-
 const deleteExpiredPosts = async (now = new Date()) => {
   let deletedPosts = 0;
   let deletedEchoes = 0;
@@ -59,8 +23,6 @@ const deleteExpiredPosts = async (now = new Date()) => {
     deletedEchoes += echoDeletionResult.deletedCount || 0;
     deletedPosts += postDeletionResult.deletedCount || 0;
   }
-
-  deletedEchoes += await deleteOrphanedEchoes();
 
   return {
     deletedPosts,
@@ -111,6 +73,5 @@ const startPostCleanupJob = () => {
 
 module.exports = {
   deleteExpiredPosts,
-  deleteOrphanedEchoes,
   startPostCleanupJob,
 };

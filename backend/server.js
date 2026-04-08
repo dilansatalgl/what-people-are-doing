@@ -2,7 +2,6 @@ const express = require("express");
 require("dotenv").config();
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
-const postRoutes = require("./routes/postRoutes");
 const { startPostCleanupJob } = require("./services/postCleanupService");
 
 const app = express();
@@ -13,7 +12,6 @@ app.use(express.json());
 
 // auth routes
 app.use("/api/auth", authRoutes);
-app.use("/api/posts", postRoutes);
 
 // test route
 app.get("/", (req, res) => {
