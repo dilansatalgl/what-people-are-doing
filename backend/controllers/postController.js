@@ -1,5 +1,11 @@
 const Post = require("../models/Post");
+const User = require("../models/User");
 const reverseGeocode = require("../utils/reverseGeocode");
+
+
+const POST_COOLDOWN_MINUTES = 10;
+const POST_COOLDOWN_MS = POST_COOLDOWN_MINUTES * 60 * 1000;
+
 
 const createPost = async (req, res) => {
   try {
@@ -36,9 +42,30 @@ const createPost = async (req, res) => {
         message: "User already has an active post",
       });
     }
-    
-    let readableLocation = null;
 
+    const user = await User.findById(req.user.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    if (user.lastPostCreatedAt) {
+      const timeSinceLastPost = Date.now() - new Date(user.lastPostCreatedAt).getTime();
+
+      if (timeSinceLastPost < POST_COOLDOWN_MS) {
+        const remainingMs = POST_COOLDOWN_MS - timeSinceLastPost;
+        const remainingSeconds = Math.ceil(remainingMs / 1000);
+
+        return res.status(429).json({
+          message: "Please wait before creating another post",
+          remainingSeconds,
+        });
+      }
+    }
+
+    let readableLocation = null;
     try {
       readableLocation = await reverseGeocode(lat, lng);
     } catch (error) {
@@ -58,6 +85,8 @@ const createPost = async (req, res) => {
       },
       expiresAt,
     });
+    user.lastPostCreatedAt = new Date();
+    await user.save();
 
     return res.status(201).json({
       message: "Post created successfully",
