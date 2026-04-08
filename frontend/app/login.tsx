@@ -59,7 +59,7 @@ export default function LoginScreen() {
       if (response.status === 400) {
         Alert.alert(
           "Error",
-          data.message || "Username and password are required."
+          data.message || "Username and password are required.",
         );
         return;
       }
@@ -76,7 +76,7 @@ export default function LoginScreen() {
 
       Alert.alert(
         "Error",
-        data.message || "Something went wrong during login."
+        data.message || "Something went wrong during login.",
       );
     } catch (error) {
       console.error("Login error:", error);
