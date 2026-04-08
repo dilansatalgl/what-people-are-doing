@@ -26,6 +26,17 @@ const createPost = async (req, res) => {
       return res.status(400).json({ message: "Invalid location coordinates" });
     }
 
+    const existingActivePost = await Post.findOne({
+        user: req.user.userId,
+        expiresAt: { $gt: new Date() },
+    });
+
+    if (existingActivePost) {
+      return res.status(409).json({
+        message: "User already has an active post",
+      });
+    }
+    
     let readableLocation = null;
 
     try {
