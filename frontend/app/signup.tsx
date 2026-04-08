@@ -109,7 +109,7 @@ export default function SignupScreen() {
         await AsyncStorage.setItem("user", JSON.stringify(data.user));
 
         Alert.alert("Success", data.message || "User created successfully.");
-        router.replace("/");
+        router.replace("/feed");
         return;
       }
 
