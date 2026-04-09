@@ -23,6 +23,10 @@ const userSchema = new mongoose.Schema(
       required: true,
       minlength: 8,
     },
+    lastPostCreatedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

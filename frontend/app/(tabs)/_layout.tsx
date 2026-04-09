@@ -1,6 +1,6 @@
 import React from "react";
-import { StyleSheet } from "react-native";
-import { Tabs } from "expo-router";
+import { StyleSheet, TouchableOpacity } from "react-native";
+import { Tabs, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -51,6 +51,14 @@ export default function TabsLayout() {
         name="post"
         options={{
           title: "Post",
+          tabBarButton: ({ children, style }) => (
+            <TouchableOpacity
+              style={style}
+              onPress={() => router.push("/create-post")}
+            >
+              {children}
+            </TouchableOpacity>
+          ),
         }}
       />
       <Tabs.Screen
