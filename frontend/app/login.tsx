@@ -51,7 +51,8 @@ export default function LoginScreen() {
         await AsyncStorage.setItem("token", data.token);
         await AsyncStorage.setItem("user", JSON.stringify(data.user));
 
-        router.replace("/create-post");
+        Alert.alert("Success", data.message || "Login successful.");
+        router.replace("/feed");
         return;
       }
 
