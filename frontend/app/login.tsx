@@ -15,9 +15,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:3000/api";
+import { API_BASE_URL } from "../constants/api";
 export default function LoginScreen() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -59,7 +57,7 @@ export default function LoginScreen() {
       if (response.status === 400) {
         Alert.alert(
           "Error",
-          data.message || "Username and password are required."
+          data.message || "Username and password are required.",
         );
         return;
       }
@@ -76,7 +74,7 @@ export default function LoginScreen() {
 
       Alert.alert(
         "Error",
-        data.message || "Something went wrong during login."
+        data.message || "Something went wrong during login.",
       );
     } catch (error) {
       console.error("Login error:", error);
