@@ -15,9 +15,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:3000/api";
+import { API_BASE_URL } from "../constants/api";
 export default function LoginScreen() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");

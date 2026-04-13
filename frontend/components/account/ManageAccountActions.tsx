@@ -12,10 +12,8 @@ import {
   clearAuthSession,
   getAuthToken,
 } from "../../utils/authStorage";
+import { API_BASE_URL } from "../../constants/api";
 import { getDeleteAccountOutcome } from "../../utils/manageAccount";
-
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:3000/api";
 
 export function ManageAccountActions() {
   const [logoutLoading, setLogoutLoading] = useState(false);
