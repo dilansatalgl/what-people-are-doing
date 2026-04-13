@@ -52,7 +52,7 @@ export default function LoginScreen() {
         await AsyncStorage.setItem("user", JSON.stringify(data.user));
 
         Alert.alert("Success", data.message || "Login successful.");
-        router.replace("/");
+        router.replace("/feed");
         return;
       }
 

@@ -1,6 +1,8 @@
 # macOS
 .DS_Store
 
+backend/uploads/
+
 # Logs
 logs
 *.log

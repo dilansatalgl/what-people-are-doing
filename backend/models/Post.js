@@ -9,12 +9,13 @@ const postSchema = new mongoose.Schema(
     },
     text: {
       type: String,
-      required: true,
+      default: "",
+      trim: true,
       maxlength: 280,
     },
     image: {
       type: String,
-      default: null,
+      required: true,
     },
     location: {
       type: {
@@ -25,6 +26,12 @@ const postSchema = new mongoose.Schema(
       coordinates: {
         type: [Number], // [longitude, latitude]
         required: true,
+        validate: {
+          validator: function (value) {
+            return Array.isArray(value) && value.length === 2;
+          },
+          message: "Location must contain longitude and latitude",
+        },
       },
       name: {
         type: String,
