@@ -27,7 +27,7 @@ const getProfile = async (req, res) => {
 
 const updateProfile = async (req, res) => {
   try {
-    const { username, email, password, confirmPassword } = req.body || {};
+    const { username, email, currentPassword, newPassword, confirmNewPassword } = req.body || {};
 
     const user = await User.findById(req.user.userId);
     if (!user) {
@@ -37,8 +37,8 @@ const updateProfile = async (req, res) => {
     const noFieldsProvided =
       username === undefined &&
       email === undefined &&
-      password === undefined &&
-      confirmPassword === undefined;
+      newPassword === undefined &&
+      confirmNewPassword === undefined;
 
     if (noFieldsProvided) {
       return res.status(400).json({ message: "No fields provided for update." });
@@ -92,29 +92,52 @@ const updateProfile = async (req, res) => {
       user.email = newEmail;
     }
 
-    const passwordProvided =
-      password !== undefined || confirmPassword !== undefined;
+     const passwordChangeRequested =
+      currentPassword !== undefined ||
+      newPassword !== undefined ||
+      confirmNewPassword !== undefined;
 
-    if (passwordProvided) {
-      if (!password || !confirmPassword) {
+    if (passwordChangeRequested) {
+      if (!currentPassword || !newPassword || !confirmNewPassword) {
         return res.status(400).json({
-          message: "Both password and confirmPassword are required to change password.",
+          message:
+            "Current password, new password, and confirm new password are all required to change password.",
         });
       }
 
-      if (!passwordRegex.test(password)) {
+      const isCurrentPasswordCorrect = await bcrypt.compare(
+        currentPassword,
+        user.password
+      );
+
+      if (!isCurrentPasswordCorrect) {
+        return res.status(400).json({ message: "Current password is incorrect." });
+      }
+
+      if (!passwordRegex.test(newPassword)) {
         return res.status(400).json({
           message:
             "Password must be at least 8 characters and include at least one uppercase letter, one number, and one special character.",
         });
       }
 
-      if (password !== confirmPassword) {
+      if (newPassword !== confirmNewPassword) {
         return res.status(400).json({ message: "Passwords do not match." });
       }
 
+      const isSameAsCurrentPassword = await bcrypt.compare(
+        newPassword,
+        user.password
+      );
+      
+      if (isSameAsCurrentPassword) {
+        return res.status(400).json({
+          message: "New password must be different from current password.",
+        });
+      }
+
       const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
+      const hashedPassword = await bcrypt.hash(newPassword, salt);
       user.password = hashedPassword;
     }
 
