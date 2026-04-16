@@ -2,12 +2,20 @@ const express = require("express");
 require("dotenv").config();
 const path = require("path");
 const connectDB = require("./config/db");
+const cors = require("cors");
 
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const postRoutes = require("./routes/postRoutes");
 
 const app = express();
+
+app.use(cors({
+  origin: "http://localhost:8081",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
 const PORT = process.env.PORT || 3000;
 
 // connect to MongoDB
