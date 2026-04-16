@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { deleteAccountData } = require("../services/accountDeletionService");
 
 const usernameRegex = /^(?=.*[a-zA-Z])[a-zA-Z0-9._]{4,15}$/;
 const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
@@ -121,7 +122,29 @@ const login = async (req, res) => {
   }
 };
 
+const deleteAccount = async (req, res) => {
+  try {
+    const deletionResult = await deleteAccountData(req.user.userId);
+
+    if (!deletionResult.deleted) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    return res.status(200).json({
+      message: "Account deleted successfully.",
+      deletedPostCount: deletionResult.deletedPostCount,
+      deletedEchoCount: deletionResult.deletedEchoCount,
+    });
+  } catch (error) {
+    console.error("Delete account error:", error.message);
+    return res
+      .status(500)
+      .json({ message: "Server error during account deletion." });
+  }
+};
+
 module.exports = {
   signup,
   login,
+  deleteAccount,
 };

@@ -1,10 +1,22 @@
 const express = require("express");
 require("dotenv").config();
+const path = require("path");
 const connectDB = require("./config/db");
+const cors = require("cors");
+
 const authRoutes = require("./routes/authRoutes");
 const { startPostCleanupJob } = require("./services/postCleanupService");
+const userRoutes = require("./routes/userRoutes");
+const postRoutes = require("./routes/postRoutes");
 
 const app = express();
+
+app.use(cors({
+  origin: "http://localhost:8081",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
 const PORT = process.env.PORT || 3000;
 
 // middleware to parse JSON
@@ -12,6 +24,13 @@ app.use(express.json());
 
 // auth routes
 app.use("/api/auth", authRoutes);
+
+// user routes
+app.use("/api/users", userRoutes);
+
+// posting routes
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/api/posts", postRoutes);
 
 // test route
 app.get("/", (req, res) => {
