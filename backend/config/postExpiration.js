@@ -1,4 +1,4 @@
-const DEFAULT_POST_TTL_HOURS = 24;
+const DEFAULT_POST_TTL_HOURS = 2;
 const DEFAULT_POST_CLEANUP_INTERVAL_MS = 60 * 1000;
 
 const parsePositiveNumber = (value, fallbackValue) => {
