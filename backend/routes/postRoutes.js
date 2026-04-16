@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 
-const { createPost } = require("../controllers/postController");
+const { createPost, deletePost } = require("../controllers/postController");
 const authMiddleware = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
 
@@ -29,5 +29,7 @@ router.post("/", authMiddleware, (req, res, next) => {
     next();
   });
 }, createPost);
+
+router.delete("/:postId", authMiddleware, deletePost);
 
 module.exports = router;

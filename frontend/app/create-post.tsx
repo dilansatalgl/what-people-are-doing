@@ -128,8 +128,10 @@ export default function CreatePostScreen() {
       });
 
       const data = await response.json().catch(() => ({}));
-
       if (response.status === 201) {
+        if (data.post) {
+          await AsyncStorage.setItem("activePost", JSON.stringify(data.post));
+        }
         router.back();
         return;
       }
