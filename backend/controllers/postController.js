@@ -2,7 +2,6 @@ const Post = require("../models/Post");
 const User = require("../models/User");
 const reverseGeocode = require("../utils/reverseGeocode");
 
-
 const POST_COOLDOWN_MINUTES = 10;
 const POST_COOLDOWN_MS = POST_COOLDOWN_MINUTES * 60 * 1000;
 
@@ -72,8 +71,6 @@ const createPost = async (req, res) => {
       readableLocation = null;
     }
 
-    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
-
     const post = await Post.create({
       user: req.user.userId,
       text: trimmedText,
@@ -83,7 +80,6 @@ const createPost = async (req, res) => {
         coordinates: [lng, lat],
         name: readableLocation,
       },
-      expiresAt,
     });
     user.lastPostCreatedAt = new Date();
     await user.save();

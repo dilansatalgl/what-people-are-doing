@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { buildPostExpirationDate } = require("../config/postExpiration");
 
 const postSchema = new mongoose.Schema(
   {
@@ -45,6 +46,7 @@ const postSchema = new mongoose.Schema(
     expiresAt: {
       type: Date,
       required: true,
+      default: () => buildPostExpirationDate(),
     },
   },
   {
@@ -53,6 +55,5 @@ const postSchema = new mongoose.Schema(
 );
 
 postSchema.index({ location: "2dsphere" });
-postSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 module.exports = mongoose.model("Post", postSchema);

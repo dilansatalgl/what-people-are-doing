@@ -5,6 +5,7 @@ const connectDB = require("./config/db");
 const cors = require("cors");
 
 const authRoutes = require("./routes/authRoutes");
+const { startPostCleanupJob } = require("./services/postCleanupService");
 const userRoutes = require("./routes/userRoutes");
 const postRoutes = require("./routes/postRoutes");
 
@@ -17,9 +18,6 @@ app.use(cors({
 }));
 
 const PORT = process.env.PORT || 3000;
-
-// connect to MongoDB
-connectDB();
 
 // middleware to parse JSON
 app.use(express.json());
@@ -39,6 +37,20 @@ app.get("/", (req, res) => {
   res.send("Backend is running");
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+const startServer = async () => {
+  await connectDB();
+  startPostCleanupJob();
+
+  return app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+  });
+};
+
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = {
+  app,
+  startServer,
+};
