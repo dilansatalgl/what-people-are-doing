@@ -5,6 +5,8 @@ const multer = require("multer");
 const { createPost, deletePost } = require("../controllers/postController");
 const authMiddleware = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
+const { getRandomFeed } = require("../controllers/feedController");
+const feedRateLimiter = require("../middleware/feedRateLimiter");
 
 router.post("/", authMiddleware, (req, res, next) => {
   upload.single("image")(req, res, function (error) {
@@ -31,5 +33,6 @@ router.post("/", authMiddleware, (req, res, next) => {
 }, createPost);
 
 router.delete("/:postId", authMiddleware, deletePost);
+router.get("/feed", authMiddleware, feedRateLimiter, getRandomFeed);
 
 module.exports = router;
