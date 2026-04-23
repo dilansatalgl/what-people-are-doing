@@ -254,6 +254,16 @@ export default function FeedScreen() {
               : null,
         })),
       );
+
+      if (showRefreshing && pathname === "/feed" && FEED_POLL_INTERVAL_MS > 0) {
+        if (pollTimer.current !== null) {
+          clearInterval(pollTimer.current);
+        }
+
+        pollTimer.current = setInterval(() => {
+          void loadFeed();
+        }, FEED_POLL_INTERVAL_MS);
+      }
     } catch (error) {
       console.error("Feed load error:", error);
       setErrorMessage("Could not connect to the server.");
@@ -268,7 +278,7 @@ export default function FeedScreen() {
         setRefreshing(false);
       }
     }
-  }, []);
+  }, [pathname]);
 
   const handleOpenPost = useCallback((post: FeedPost) => {
     skipNextFocusReload.current = true;
