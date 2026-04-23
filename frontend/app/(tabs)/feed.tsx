@@ -3,8 +3,9 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
   Animated,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Pressable,
-  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -34,6 +35,8 @@ type FeedResponse = {
 };
 
 const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
+const PULL_THRESHOLD = 70;
+const SPINNER_AREA_HEIGHT = 56;
 const ESTIMATED_CAPTION_CHARS_PER_LINE = 18;
 const ESTIMATED_CARD_BASE_HEIGHT = 280;
 const ESTIMATED_TEXT_LINE_HEIGHT = 22;
@@ -77,9 +80,12 @@ export default function FeedScreen() {
   const pathname = usePathname();
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const glowOneAnimation = useRef(new Animated.Value(0)).current;
   const glowTwoAnimation = useRef(new Animated.Value(0)).current;
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const spacerHeight = useRef(new Animated.Value(0)).current;
   const hasLoadedFeed = useRef(false);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const requestInFlight = useRef(false);
@@ -182,8 +188,12 @@ export default function FeedScreen() {
     ],
   };
 
-  const loadFeed = useCallback(async ({ showLoading = false }: {
+  const loadFeed = useCallback(async ({
+    showLoading = false,
+    showRefreshing = false,
+  }: {
     showLoading?: boolean;
+    showRefreshing?: boolean;
   } = {}) => {
     if (requestInFlight.current) {
       return;
@@ -193,6 +203,10 @@ export default function FeedScreen() {
 
     if (showLoading) {
       setLoading(true);
+    }
+
+    if (showRefreshing) {
+      setRefreshing(true);
     }
 
     setErrorMessage(null);
@@ -249,6 +263,10 @@ export default function FeedScreen() {
       if (showLoading) {
         setLoading(false);
       }
+
+      if (showRefreshing) {
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -270,6 +288,32 @@ export default function FeedScreen() {
       pollTimer.current = null;
     }
   }, []);
+
+  useEffect(() => {
+    Animated.spring(spacerHeight, {
+      toValue: refreshing ? SPINNER_AREA_HEIGHT : 0,
+      useNativeDriver: false,
+      bounciness: 6,
+    }).start();
+  }, [refreshing, spacerHeight]);
+
+  const handleScrollEndDrag = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (
+        !requestInFlight.current &&
+        event.nativeEvent.contentOffset.y <= -PULL_THRESHOLD
+      ) {
+        void loadFeed({ showRefreshing: true });
+      }
+    },
+    [loadFeed],
+  );
+
+  const pullOpacity = scrollY.interpolate({
+    inputRange: [-PULL_THRESHOLD, -16, 0],
+    outputRange: [1, 0.2, 0],
+    extrapolate: "clamp",
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -366,11 +410,24 @@ export default function FeedScreen() {
           </View>
         </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.feedTitle}>The Pulse</Text>
+        <View style={styles.scrollWrap}>
+          <View pointerEvents="none" style={styles.spinnerOverlay}>
+            <Animated.View style={{ opacity: refreshing ? 1 : pullOpacity }}>
+              <ActivityIndicator size="large" color="#FFFFFF" />
+            </Animated.View>
+          </View>
+          <Animated.ScrollView
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+              { useNativeDriver: true },
+            )}
+            onScrollEndDrag={handleScrollEndDrag}
+          >
+            <Animated.View style={{ height: spacerHeight }} />
+            <Text style={styles.feedTitle}>The Pulse</Text>
 
           <View style={styles.masonryGrid}>
             <View style={styles.masonryColumn}>
@@ -389,7 +446,8 @@ export default function FeedScreen() {
               ))}
             </View>
           </View>
-        </ScrollView>
+          </Animated.ScrollView>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -399,6 +457,17 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#000000",
+  },
+  scrollWrap: {
+    flex: 1,
+  },
+  spinnerOverlay: {
+    position: "absolute",
+    top: 14,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 0,
   },
   loadingState: {
     flex: 1,
