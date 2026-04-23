@@ -3,7 +3,7 @@ import Constants from "expo-constants";
 const DEFAULT_API_PORT = "3000";
 const DEFAULT_API_PATH = "/api";
 const LOCALHOST_API_BASE_URL = `http://localhost:${DEFAULT_API_PORT}${DEFAULT_API_PATH}`;
-const DEFAULT_FEED_POLL_INTERVAL_MS = 30000;
+const DEFAULT_FEED_POLL_INTERVAL_MS = 3600000;
 
 const normalizeApiBaseUrl = (value: string | undefined) => {
   const trimmedValue = value?.trim();
