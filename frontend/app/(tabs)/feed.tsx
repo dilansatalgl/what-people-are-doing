@@ -5,16 +5,16 @@ import {
   Animated,
   Pressable,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router } from "expo-router";
+import { router, useFocusEffect, usePathname } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { PostCard, type FeedPost } from "../../components/posts/PostCard";
-import { API_BASE_URL } from "../../constants/api";
+import { API_BASE_URL, FEED_POLL_INTERVAL_MS } from "../../constants/api";
 
 type FeedApiPost = {
   postId: string;
@@ -74,11 +74,16 @@ const buildMasonryColumns = (posts: FeedPost[]) => {
 };
 
 export default function FeedScreen() {
+  const pathname = usePathname();
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const glowOneAnimation = useRef(new Animated.Value(0)).current;
   const glowTwoAnimation = useRef(new Animated.Value(0)).current;
+  const hasLoadedFeed = useRef(false);
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const requestInFlight = useRef(false);
+  const skipNextFocusReload = useRef(false);
   const { leftColumn, rightColumn } = buildMasonryColumns(feedPosts);
 
   useEffect(() => {
@@ -177,8 +182,19 @@ export default function FeedScreen() {
     ],
   };
 
-  const loadFeed = useCallback(async () => {
-    setLoading(true);
+  const loadFeed = useCallback(async ({ showLoading = false }: {
+    showLoading?: boolean;
+  } = {}) => {
+    if (requestInFlight.current) {
+      return;
+    }
+
+    requestInFlight.current = true;
+
+    if (showLoading) {
+      setLoading(true);
+    }
+
     setErrorMessage(null);
 
     try {
@@ -228,11 +244,17 @@ export default function FeedScreen() {
       console.error("Feed load error:", error);
       setErrorMessage("Could not connect to the server.");
     } finally {
-      setLoading(false);
+      requestInFlight.current = false;
+
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   }, []);
 
   const handleOpenPost = useCallback((post: FeedPost) => {
+    skipNextFocusReload.current = true;
+
     router.push({
       pathname: "/posts/[postId]",
       params: {
@@ -242,12 +264,42 @@ export default function FeedScreen() {
     });
   }, []);
 
+  const stopPolling = useCallback(() => {
+    if (pollTimer.current !== null) {
+      clearInterval(pollTimer.current);
+      pollTimer.current = null;
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasLoadedFeed.current) {
+        hasLoadedFeed.current = true;
+        void loadFeed({ showLoading: true });
+      } else if (skipNextFocusReload.current) {
+        skipNextFocusReload.current = false;
+      } else {
+        void loadFeed();
+      }
+    }, [loadFeed]),
+  );
+
   useEffect(() => {
-    void loadFeed();
-  }, [loadFeed]);
+    stopPolling();
+
+    if (pathname !== "/feed" || FEED_POLL_INTERVAL_MS <= 0) {
+      return;
+    }
+
+    pollTimer.current = setInterval(() => {
+      void loadFeed();
+    }, FEED_POLL_INTERVAL_MS);
+
+    return stopPolling;
+  }, [loadFeed, pathname, stopPolling]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={["top"]} style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
       {loading ? (
         <View style={styles.loadingState}>
@@ -278,7 +330,10 @@ export default function FeedScreen() {
               <Text style={styles.emptyStateTitle}>Could not load the feed.</Text>
               <Text style={styles.emptyStateText}>{errorMessage}</Text>
 
-              <Pressable style={styles.retryButton} onPress={() => void loadFeed()}>
+              <Pressable
+                style={styles.retryButton}
+                onPress={() => void loadFeed({ showLoading: true })}
+              >
                 <Text style={styles.retryButtonText}>Retry</Text>
               </Pressable>
             </View>
