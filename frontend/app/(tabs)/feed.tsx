@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
+  Animated,
+  Pressable,
   ScrollView,
   SafeAreaView,
   StatusBar,
@@ -73,10 +76,110 @@ const buildMasonryColumns = (posts: FeedPost[]) => {
 export default function FeedScreen() {
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const glowOneAnimation = useRef(new Animated.Value(0)).current;
+  const glowTwoAnimation = useRef(new Animated.Value(0)).current;
   const { leftColumn, rightColumn } = buildMasonryColumns(feedPosts);
+
+  useEffect(() => {
+    const glowOneLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowOneAnimation, {
+          toValue: 1,
+          duration: 4200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowOneAnimation, {
+          toValue: 0,
+          duration: 4200,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    const glowTwoLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowTwoAnimation, {
+          toValue: 1,
+          duration: 5200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowTwoAnimation, {
+          toValue: 0,
+          duration: 5200,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    glowOneLoop.start();
+    glowTwoLoop.start();
+
+    return () => {
+      glowOneLoop.stop();
+      glowTwoLoop.stop();
+      glowOneAnimation.stopAnimation();
+      glowTwoAnimation.stopAnimation();
+    };
+  }, [glowOneAnimation, glowTwoAnimation]);
+
+  const glowOneStyle = {
+    opacity: glowOneAnimation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.85, 1],
+    }),
+    transform: [
+      {
+        translateX: glowOneAnimation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, 14],
+        }),
+      },
+      {
+        translateY: glowOneAnimation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, -10],
+        }),
+      },
+      {
+        scale: glowOneAnimation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [1, 1.06],
+        }),
+      },
+    ],
+  };
+
+  const glowTwoStyle = {
+    opacity: glowTwoAnimation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.7, 0.92],
+    }),
+    transform: [
+      {
+        translateX: glowTwoAnimation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, -12],
+        }),
+      },
+      {
+        translateY: glowTwoAnimation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, 12],
+        }),
+      },
+      {
+        scale: glowTwoAnimation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [1, 1.08],
+        }),
+      },
+    ],
+  };
 
   const loadFeed = useCallback(async () => {
     setLoading(true);
+    setErrorMessage(null);
 
     try {
       const token = await AsyncStorage.getItem("token");
@@ -100,6 +203,7 @@ export default function FeedScreen() {
       const data = (await response.json()) as FeedResponse;
 
       if (!response.ok) {
+        setErrorMessage(data?.message || "Could not load the feed.");
         return;
       }
 
@@ -122,6 +226,7 @@ export default function FeedScreen() {
       );
     } catch (error) {
       console.error("Feed load error:", error);
+      setErrorMessage("Could not connect to the server.");
     } finally {
       setLoading(false);
     }
@@ -149,14 +254,68 @@ export default function FeedScreen() {
           <ActivityIndicator size="large" color="#FFFFFF" />
           <Text style={styles.loadingText}>Loading the feed...</Text>
         </View>
+      ) : errorMessage ? (
+        <View style={[styles.listContent, styles.emptyListContent]}>
+          <View style={styles.emptyState}>
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.emptyGlowOne, glowOneStyle]}
+            />
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.emptyGlowTwo, glowTwoStyle]}
+            />
+
+            <View style={styles.emptyCard}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={28}
+                  color="#F3D0D0"
+                />
+              </View>
+
+              <Text style={styles.emptyStateTitle}>Could not load the feed.</Text>
+              <Text style={styles.emptyStateText}>{errorMessage}</Text>
+
+              <Pressable style={styles.retryButton} onPress={() => void loadFeed()}>
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      ) : feedPosts.length === 0 ? (
+        <View style={[styles.listContent, styles.emptyListContent]}>
+          <View style={styles.emptyState}>
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.emptyGlowOne, glowOneStyle]}
+            />
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.emptyGlowTwo, glowTwoStyle]}
+            />
+
+            <View style={styles.emptyCard}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="images-outline" size={28} color="#EAEAEA" />
+              </View>
+
+              <Text style={styles.emptyStateTitle}>
+                Nobody is doing anything right now.
+              </Text>
+              <Text style={styles.emptyStateText}>
+                New posts will appear here as people share what they are doing.
+              </Text>
+            </View>
+          </View>
+        </View>
       ) : (
         <ScrollView
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         >
-          {feedPosts.length > 0 ? (
-            <Text style={styles.feedTitle}>The Pulse</Text>
-          ) : null}
+          <Text style={styles.feedTitle}>The Pulse</Text>
 
           <View style={styles.masonryGrid}>
             <View style={styles.masonryColumn}>
@@ -206,6 +365,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
     marginBottom: 18,
   },
+  emptyListContent: {
+    flex: 1,
+    justifyContent: "center",
+  },
   masonryGrid: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -216,5 +379,78 @@ const styles = StyleSheet.create({
   },
   masonryItem: {
     marginBottom: 16,
+  },
+  emptyState: {
+    position: "relative",
+    minHeight: 420,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  emptyGlowOne: {
+    position: "absolute",
+    top: 56,
+    left: -28,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: "#171717",
+  },
+  emptyGlowTwo: {
+    position: "absolute",
+    right: -18,
+    bottom: 28,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: "#101010",
+  },
+  emptyCard: {
+    width: "100%",
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "#242424",
+    backgroundColor: "#111111",
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+    alignItems: "center",
+  },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    marginBottom: 18,
+    borderRadius: 32,
+    borderWidth: 1,
+    borderColor: "#2C2C2C",
+    backgroundColor: "#1A1A1A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyStateTitle: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "700",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    maxWidth: 260,
+    color: "#9B9B9B",
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+  },
+  retryButton: {
+    marginTop: 18,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  retryButtonText: {
+    color: "#000000",
+    fontSize: 14,
+    fontWeight: "700",
   },
 });
