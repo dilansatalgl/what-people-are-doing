@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router, useFocusEffect, usePathname } from "expo-router";
+import { router, usePathname } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PostCard, type FeedPost } from "../../components/posts/PostCard";
 import { API_BASE_URL, FEED_POLL_INTERVAL_MS } from "../../constants/api";
@@ -89,9 +89,9 @@ export default function FeedScreen() {
   const spacerHeight = useRef(new Animated.Value(0)).current;
   const feedScrollRef = useRef<ScrollViewType | null>(null);
   const hasLoadedFeed = useRef(false);
+  const isFeedRouteActive = useRef(pathname === "/feed");
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const requestInFlight = useRef(false);
-  const skipNextFocusReload = useRef(false);
   const { leftColumn, rightColumn } = buildMasonryColumns(feedPosts);
 
   useEffect(() => {
@@ -266,17 +266,21 @@ export default function FeedScreen() {
         })),
       );
 
-      if (scrollToTopOnSuccess) {
+      if (scrollToTopOnSuccess && isFeedRouteActive.current) {
         scrollFeedToTop();
       }
 
-      if (showRefreshing && pathname === "/feed" && FEED_POLL_INTERVAL_MS > 0) {
+      if (
+        showRefreshing &&
+        isFeedRouteActive.current &&
+        FEED_POLL_INTERVAL_MS > 0
+      ) {
         if (pollTimer.current !== null) {
           clearInterval(pollTimer.current);
         }
 
         pollTimer.current = setInterval(() => {
-          void loadFeed();
+          void loadFeed({ scrollToTopOnSuccess: true });
         }, FEED_POLL_INTERVAL_MS);
       }
     } catch (error) {
@@ -293,11 +297,9 @@ export default function FeedScreen() {
         setRefreshing(false);
       }
     }
-  }, [pathname, scrollFeedToTop]);
+  }, [scrollFeedToTop]);
 
   const handleOpenPost = useCallback((post: FeedPost) => {
-    skipNextFocusReload.current = true;
-
     router.push({
       pathname: "/posts/[postId]",
       params: {
@@ -313,6 +315,10 @@ export default function FeedScreen() {
       pollTimer.current = null;
     }
   }, []);
+
+  useEffect(() => {
+    isFeedRouteActive.current = pathname === "/feed";
+  }, [pathname]);
 
   useEffect(() => {
     Animated.spring(spacerHeight, {
@@ -340,18 +346,14 @@ export default function FeedScreen() {
     extrapolate: "clamp",
   });
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!hasLoadedFeed.current) {
-        hasLoadedFeed.current = true;
-        void loadFeed({ showLoading: true });
-      } else if (skipNextFocusReload.current) {
-        skipNextFocusReload.current = false;
-      } else {
-        void loadFeed();
-      }
-    }, [loadFeed]),
-  );
+  useEffect(() => {
+    if (hasLoadedFeed.current) {
+      return;
+    }
+
+    hasLoadedFeed.current = true;
+    void loadFeed({ showLoading: true });
+  }, [loadFeed]);
 
   useEffect(() => {
     stopPolling();
