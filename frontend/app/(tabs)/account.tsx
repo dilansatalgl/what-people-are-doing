@@ -255,7 +255,7 @@ export default function AccountScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={["top"]} style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
         <KeyboardAvoidingView
           style={{ flex: 1 }}
