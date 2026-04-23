@@ -5,6 +5,7 @@ import {
   Animated,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type ScrollView as ScrollViewType,
   Pressable,
   StatusBar,
   StyleSheet,
@@ -86,6 +87,7 @@ export default function FeedScreen() {
   const glowTwoAnimation = useRef(new Animated.Value(0)).current;
   const scrollY = useRef(new Animated.Value(0)).current;
   const spacerHeight = useRef(new Animated.Value(0)).current;
+  const feedScrollRef = useRef<ScrollViewType | null>(null);
   const hasLoadedFeed = useRef(false);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const requestInFlight = useRef(false);
@@ -188,12 +190,21 @@ export default function FeedScreen() {
     ],
   };
 
+  const scrollFeedToTop = useCallback(() => {
+    feedScrollRef.current?.scrollTo({
+      y: 0,
+      animated: true,
+    });
+  }, []);
+
   const loadFeed = useCallback(async ({
     showLoading = false,
     showRefreshing = false,
+    scrollToTopOnSuccess = false,
   }: {
     showLoading?: boolean;
     showRefreshing?: boolean;
+    scrollToTopOnSuccess?: boolean;
   } = {}) => {
     if (requestInFlight.current) {
       return;
@@ -255,6 +266,10 @@ export default function FeedScreen() {
         })),
       );
 
+      if (scrollToTopOnSuccess) {
+        scrollFeedToTop();
+      }
+
       if (showRefreshing && pathname === "/feed" && FEED_POLL_INTERVAL_MS > 0) {
         if (pollTimer.current !== null) {
           clearInterval(pollTimer.current);
@@ -278,7 +293,7 @@ export default function FeedScreen() {
         setRefreshing(false);
       }
     }
-  }, [pathname]);
+  }, [pathname, scrollFeedToTop]);
 
   const handleOpenPost = useCallback((post: FeedPost) => {
     skipNextFocusReload.current = true;
@@ -346,7 +361,7 @@ export default function FeedScreen() {
     }
 
     pollTimer.current = setInterval(() => {
-      void loadFeed();
+      void loadFeed({ scrollToTopOnSuccess: true });
     }, FEED_POLL_INTERVAL_MS);
 
     return stopPolling;
@@ -427,6 +442,7 @@ export default function FeedScreen() {
             </Animated.View>
           </View>
           <Animated.ScrollView
+            ref={feedScrollRef}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
             scrollEventThrottle={16}
