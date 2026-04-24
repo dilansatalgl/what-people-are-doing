@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Image,
   Pressable,
@@ -14,6 +14,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { FeedPost } from "../../components/posts/PostCard";
 import { API_BASE_URL } from "../../constants/api";
+import { publishEchoChange } from "../../utils/echoStore";
 
 const getStringParam = (value: string | string[] | undefined) => {
   if (Array.isArray(value)) {
@@ -70,7 +71,7 @@ export default function PostDetailScreen() {
 
   const [echoCount, setEchoCount] = useState(post?.echoCount ?? 0);
   const [hasEchoed, setHasEchoed] = useState(post?.hasEchoed ?? false);
-  const [echoLoading, setEchoLoading] = useState(false);
+  const echoInFlight = useRef(false);
 
   if (!post) {
     return (
@@ -95,20 +96,21 @@ export default function PostDetailScreen() {
   const timeLabel = formatPostTime(post.createdAt);
 
   const handleEchoPress = async () => {
-    if (echoLoading) return;
+    if (echoInFlight.current) return;
+    echoInFlight.current = true;
 
     const prevEchoed = hasEchoed;
     const prevCount = echoCount;
+    const newEchoCount = Math.max(0, prevCount + (prevEchoed ? -1 : 1));
 
     setHasEchoed(!prevEchoed);
-    setEchoCount(prevCount + (prevEchoed ? -1 : 1));
-    setEchoLoading(true);
+    setEchoCount(newEchoCount);
 
     try {
       const token = await AsyncStorage.getItem("token");
       if (!token) {
         router.replace("/login");
-        return;
+        throw new Error("Missing auth token");
       }
 
       const method = prevEchoed ? "DELETE" : "POST";
@@ -119,17 +121,32 @@ export default function PostDetailScreen() {
 
       if (response.status === 401) {
         router.replace("/login");
-        return;
+        throw new Error("Unauthorized");
       }
+
+      const data = (await response.json()) as { echoCount?: number };
 
       if (!response.ok) {
         throw new Error("Echo request failed");
       }
+
+      if (typeof data.echoCount !== "number") {
+        throw new Error("Echo response missing count");
+      }
+
+      setEchoCount(data.echoCount);
+      publishEchoChange({
+        postId: post.id,
+        hasEchoed: !prevEchoed,
+        echoCount: data.echoCount,
+      });
     } catch {
       setHasEchoed(prevEchoed);
       setEchoCount(prevCount);
     } finally {
-      setEchoLoading(false);
+      setTimeout(() => {
+        echoInFlight.current = false;
+      }, 400);
     }
   };
 
@@ -173,13 +190,22 @@ export default function PostDetailScreen() {
             ) : null}
 
             <View style={styles.echoRow}>
-              <Pressable style={styles.echoButton} onPress={handleEchoPress} hitSlop={8}>
+              <Pressable
+                style={styles.echoButton}
+                onPress={handleEchoPress}
+                hitSlop={8}
+              >
                 <Ionicons
                   name={hasEchoed ? "radio" : "radio-outline"}
                   size={18}
                   color={hasEchoed ? "#FFFFFF" : "#4A4A4A"}
                 />
-                <Text style={[styles.echoLabel, hasEchoed && styles.echoLabelActive]}>
+                <Text
+                  style={[
+                    styles.echoLabel,
+                    hasEchoed && styles.echoLabelActive,
+                  ]}
+                >
                   {echoCount > 0 ? `${echoCount} ` : ""}Echo
                 </Text>
               </Pressable>

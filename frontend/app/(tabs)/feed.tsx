@@ -17,6 +17,7 @@ import { router, usePathname } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PostCard, type FeedPost } from "../../components/posts/PostCard";
 import { API_BASE_URL, FEED_POLL_INTERVAL_MS } from "../../constants/api";
+import { subscribeToEchoChanges } from "../../utils/echoStore";
 
 type FeedApiPost = {
   postId: string;
@@ -313,18 +314,27 @@ export default function FeedScreen() {
     });
   }, []);
 
-  const handleEchoStateChange = useCallback((postId: string, hasEchoed: boolean, echoCount: number) => {
-    setFeedPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, hasEchoed, echoCount } : p)),
-    );
-  }, []);
+  const handleEchoStateChange = useCallback(
+    (postId: string, hasEchoed: boolean, echoCount: number) => {
+      setFeedPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, hasEchoed, echoCount } : p)),
+      );
+    },
+    [],
+  );
+
+  useEffect(() => {
+    return subscribeToEchoChanges(({ postId, hasEchoed, echoCount }) => {
+      handleEchoStateChange(postId, hasEchoed, echoCount);
+    });
+  }, [handleEchoStateChange]);
 
   const handleEchoToggle = useCallback(
     async (postId: string, currentlyEchoed: boolean) => {
       const token = await AsyncStorage.getItem("token");
       if (!token) {
         router.replace("/login");
-        return;
+        throw new Error("Missing auth token");
       }
 
       const method = currentlyEchoed ? "DELETE" : "POST";
@@ -335,12 +345,20 @@ export default function FeedScreen() {
 
       if (response.status === 401) {
         router.replace("/login");
-        return;
+        throw new Error("Unauthorized");
       }
+
+      const data = (await response.json()) as { echoCount?: number };
 
       if (!response.ok) {
         throw new Error("Echo request failed");
       }
+
+      if (typeof data.echoCount !== "number") {
+        throw new Error("Echo response missing count");
+      }
+
+      return data.echoCount;
     },
     [],
   );
@@ -499,7 +517,12 @@ export default function FeedScreen() {
               <View style={styles.masonryColumn}>
                 {leftColumn.map((post) => (
                   <View key={post.id} style={styles.masonryItem}>
-                    <PostCard post={post} onPress={handleOpenPost} onEchoToggle={handleEchoToggle} onEchoStateChange={handleEchoStateChange} />
+                    <PostCard
+                      post={post}
+                      onPress={handleOpenPost}
+                      onEchoToggle={handleEchoToggle}
+                      onEchoStateChange={handleEchoStateChange}
+                    />
                   </View>
                 ))}
               </View>
@@ -507,7 +530,12 @@ export default function FeedScreen() {
               <View style={styles.masonryColumn}>
                 {rightColumn.map((post) => (
                   <View key={post.id} style={styles.masonryItem}>
-                    <PostCard post={post} onPress={handleOpenPost} onEchoToggle={handleEchoToggle} onEchoStateChange={handleEchoStateChange} />
+                    <PostCard
+                      post={post}
+                      onPress={handleOpenPost}
+                      onEchoToggle={handleEchoToggle}
+                      onEchoStateChange={handleEchoStateChange}
+                    />
                   </View>
                 ))}
               </View>

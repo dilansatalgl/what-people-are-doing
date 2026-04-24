@@ -1,5 +1,12 @@
-import { useRef, useState } from "react";
-import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  Animated,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 type FeedCoordinates = {
@@ -21,8 +28,12 @@ export type FeedPost = {
 type PostCardProps = {
   post: FeedPost;
   onPress?: (post: FeedPost) => void;
-  onEchoToggle?: (postId: string, currentlyEchoed: boolean) => Promise<void>;
-  onEchoStateChange?: (postId: string, hasEchoed: boolean, echoCount: number) => void;
+  onEchoToggle?: (postId: string, currentlyEchoed: boolean) => Promise<number>;
+  onEchoStateChange?: (
+    postId: string,
+    hasEchoed: boolean,
+    echoCount: number,
+  ) => void;
 };
 
 const formatCoordinates = ({
@@ -33,15 +44,26 @@ const formatCoordinates = ({
   longitude: number;
 }) => `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
 
-export function PostCard({ post, onPress, onEchoToggle, onEchoStateChange }: PostCardProps) {
+export function PostCard({
+  post,
+  onPress,
+  onEchoToggle,
+  onEchoStateChange,
+}: PostCardProps) {
   const [isPressed, setIsPressed] = useState(false);
   const [echoCount, setEchoCount] = useState(post.echoCount);
   const [hasEchoed, setHasEchoed] = useState(post.hasEchoed);
-  const [echoLoading, setEchoLoading] = useState(false);
+  const echoInFlight = useRef(false);
   const pressAnimation = useRef(new Animated.Value(0)).current;
   const locationLabel =
     post.locationName ||
     (post.coordinates ? formatCoordinates(post.coordinates) : null);
+
+  useEffect(() => {
+    setEchoCount(post.echoCount);
+    setHasEchoed(post.hasEchoed);
+  }, [post.echoCount, post.hasEchoed]);
+
   const animatedCardStyle = {
     transform: [
       {
@@ -77,26 +99,30 @@ export function PostCard({ post, onPress, onEchoToggle, onEchoStateChange }: Pos
   };
 
   const handleEchoPress = async () => {
-    if (echoLoading || !onEchoToggle) return;
+    if (echoInFlight.current || !onEchoToggle) return;
+    echoInFlight.current = true;
 
     const prevEchoed = hasEchoed;
     const prevCount = echoCount;
     const newHasEchoed = !prevEchoed;
-    const newCount = prevCount + (prevEchoed ? -1 : 1);
+    const newCount = Math.max(0, prevCount + (prevEchoed ? -1 : 1));
 
     setHasEchoed(newHasEchoed);
     setEchoCount(newCount);
-    setEchoLoading(true);
     onEchoStateChange?.(post.id, newHasEchoed, newCount);
 
     try {
-      await onEchoToggle(post.id, prevEchoed);
+      const serverEchoCount = await onEchoToggle(post.id, prevEchoed);
+      setEchoCount(serverEchoCount);
+      onEchoStateChange?.(post.id, newHasEchoed, serverEchoCount);
     } catch {
       setHasEchoed(prevEchoed);
       setEchoCount(prevCount);
       onEchoStateChange?.(post.id, prevEchoed, prevCount);
     } finally {
-      setEchoLoading(false);
+      setTimeout(() => {
+        echoInFlight.current = false;
+      }, 400);
     }
   };
 
@@ -117,7 +143,9 @@ export function PostCard({ post, onPress, onEchoToggle, onEchoStateChange }: Pos
           <Image source={{ uri: post.imageUrl }} style={styles.image} />
 
           <View style={styles.body}>
-            {post.text ? <Text style={styles.postText}>{post.text}</Text> : null}
+            {post.text ? (
+              <Text style={styles.postText}>{post.text}</Text>
+            ) : null}
 
             <View style={styles.metaRow}>
               {locationLabel ? (
@@ -137,7 +165,10 @@ export function PostCard({ post, onPress, onEchoToggle, onEchoStateChange }: Pos
 
               <Pressable
                 style={styles.echoButton}
-                onPress={handleEchoPress}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  void handleEchoPress();
+                }}
                 hitSlop={8}
               >
                 <Ionicons
@@ -146,7 +177,12 @@ export function PostCard({ post, onPress, onEchoToggle, onEchoStateChange }: Pos
                   color={hasEchoed ? "#FFFFFF" : "#4A4A4A"}
                 />
                 {echoCount > 0 ? (
-                  <Text style={[styles.echoCount, hasEchoed && styles.echoCountActive]}>
+                  <Text
+                    style={[
+                      styles.echoCount,
+                      hasEchoed && styles.echoCountActive,
+                    ]}
+                  >
                     {echoCount}
                   </Text>
                 ) : null}

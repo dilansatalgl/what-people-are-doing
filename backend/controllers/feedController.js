@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const Echo = require("../models/Echo");
 const Post = require("../models/Post");
 
 const getRandomFeed = async (req, res) => {
@@ -28,7 +29,7 @@ const getRandomFeed = async (req, res) => {
       },
       {
         $lookup: {
-          from: "echoes",
+          from: Echo.collection.name,
           let: { postId: "$_id" },
           pipeline: [
             {
