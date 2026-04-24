@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Alert, Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 type FeedCoordinates = {
@@ -79,25 +79,22 @@ export function PostCard({ post, onPress, onEchoToggle, onEchoStateChange }: Pos
   const handleEchoPress = async () => {
     if (echoLoading || !onEchoToggle) return;
 
-    if (hasEchoed) {
-      Alert.alert("Already echoed", "You've already echoed this post.");
-      return;
-    }
-
+    const prevEchoed = hasEchoed;
     const prevCount = echoCount;
-    const newCount = prevCount + 1;
+    const newHasEchoed = !prevEchoed;
+    const newCount = prevCount + (prevEchoed ? -1 : 1);
 
-    setHasEchoed(true);
+    setHasEchoed(newHasEchoed);
     setEchoCount(newCount);
     setEchoLoading(true);
-    onEchoStateChange?.(post.id, true, newCount);
+    onEchoStateChange?.(post.id, newHasEchoed, newCount);
 
     try {
-      await onEchoToggle(post.id, false);
+      await onEchoToggle(post.id, prevEchoed);
     } catch {
-      setHasEchoed(false);
+      setHasEchoed(prevEchoed);
       setEchoCount(prevCount);
-      onEchoStateChange?.(post.id, false, prevCount);
+      onEchoStateChange?.(post.id, prevEchoed, prevCount);
     } finally {
       setEchoLoading(false);
     }

@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import {
-  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -98,15 +97,11 @@ export default function PostDetailScreen() {
   const handleEchoPress = async () => {
     if (echoLoading) return;
 
-    if (hasEchoed) {
-      Alert.alert("Already echoed", "You've already echoed this post.");
-      return;
-    }
-
+    const prevEchoed = hasEchoed;
     const prevCount = echoCount;
 
-    setHasEchoed(true);
-    setEchoCount(prevCount + 1);
+    setHasEchoed(!prevEchoed);
+    setEchoCount(prevCount + (prevEchoed ? -1 : 1));
     setEchoLoading(true);
 
     try {
@@ -116,8 +111,9 @@ export default function PostDetailScreen() {
         return;
       }
 
+      const method = prevEchoed ? "DELETE" : "POST";
       const response = await fetch(`${API_BASE_URL}/posts/${post.id}/echo`, {
-        method: "POST",
+        method,
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -130,7 +126,7 @@ export default function PostDetailScreen() {
         throw new Error("Echo request failed");
       }
     } catch {
-      setHasEchoed(false);
+      setHasEchoed(prevEchoed);
       setEchoCount(prevCount);
     } finally {
       setEchoLoading(false);
