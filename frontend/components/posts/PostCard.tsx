@@ -1,5 +1,12 @@
-import { useRef, useState } from "react";
-import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  Animated,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 type FeedCoordinates = {
@@ -14,11 +21,19 @@ export type FeedPost = {
   locationName: string | null;
   coordinates: FeedCoordinates | null;
   createdAt: string;
+  echoCount: number;
+  hasEchoed: boolean;
 };
 
 type PostCardProps = {
   post: FeedPost;
   onPress?: (post: FeedPost) => void;
+  onEchoToggle?: (postId: string, currentlyEchoed: boolean) => Promise<number>;
+  onEchoStateChange?: (
+    postId: string,
+    hasEchoed: boolean,
+    echoCount: number,
+  ) => void;
 };
 
 const formatCoordinates = ({
@@ -29,12 +44,26 @@ const formatCoordinates = ({
   longitude: number;
 }) => `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
 
-export function PostCard({ post, onPress }: PostCardProps) {
+export function PostCard({
+  post,
+  onPress,
+  onEchoToggle,
+  onEchoStateChange,
+}: PostCardProps) {
   const [isPressed, setIsPressed] = useState(false);
+  const [echoCount, setEchoCount] = useState(post.echoCount);
+  const [hasEchoed, setHasEchoed] = useState(post.hasEchoed);
+  const echoInFlight = useRef(false);
   const pressAnimation = useRef(new Animated.Value(0)).current;
   const locationLabel =
     post.locationName ||
     (post.coordinates ? formatCoordinates(post.coordinates) : null);
+
+  useEffect(() => {
+    setEchoCount(post.echoCount);
+    setHasEchoed(post.hasEchoed);
+  }, [post.echoCount, post.hasEchoed]);
+
   const animatedCardStyle = {
     transform: [
       {
@@ -69,6 +98,34 @@ export function PostCard({ post, onPress }: PostCardProps) {
     });
   };
 
+  const handleEchoPress = async () => {
+    if (echoInFlight.current || !onEchoToggle) return;
+    echoInFlight.current = true;
+
+    const prevEchoed = hasEchoed;
+    const prevCount = echoCount;
+    const newHasEchoed = !prevEchoed;
+    const newCount = Math.max(0, prevCount + (prevEchoed ? -1 : 1));
+
+    setHasEchoed(newHasEchoed);
+    setEchoCount(newCount);
+    onEchoStateChange?.(post.id, newHasEchoed, newCount);
+
+    try {
+      const serverEchoCount = await onEchoToggle(post.id, prevEchoed);
+      setEchoCount(serverEchoCount);
+      onEchoStateChange?.(post.id, newHasEchoed, serverEchoCount);
+    } catch {
+      setHasEchoed(prevEchoed);
+      setEchoCount(prevCount);
+      onEchoStateChange?.(post.id, prevEchoed, prevCount);
+    } finally {
+      setTimeout(() => {
+        echoInFlight.current = false;
+      }, 400);
+    }
+  };
+
   return (
     <Pressable
       onPress={() => onPress?.(post)}
@@ -86,10 +143,12 @@ export function PostCard({ post, onPress }: PostCardProps) {
           <Image source={{ uri: post.imageUrl }} style={styles.image} />
 
           <View style={styles.body}>
-            {post.text ? <Text style={styles.postText}>{post.text}</Text> : null}
+            {post.text ? (
+              <Text style={styles.postText}>{post.text}</Text>
+            ) : null}
 
-            {locationLabel ? (
-              <View style={styles.metaRow}>
+            <View style={styles.metaRow}>
+              {locationLabel ? (
                 <View style={styles.locationRow}>
                   <Ionicons name="location-outline" size={13} color="#8F8F8F" />
                   <Text
@@ -100,8 +159,35 @@ export function PostCard({ post, onPress }: PostCardProps) {
                     {locationLabel}
                   </Text>
                 </View>
-              </View>
-            ) : null}
+              ) : (
+                <View style={styles.locationRow} />
+              )}
+
+              <Pressable
+                style={styles.echoButton}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  void handleEchoPress();
+                }}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={hasEchoed ? "radio" : "radio-outline"}
+                  size={15}
+                  color={hasEchoed ? "#FFFFFF" : "#4A4A4A"}
+                />
+                {echoCount > 0 ? (
+                  <Text
+                    style={[
+                      styles.echoCount,
+                      hasEchoed && styles.echoCountActive,
+                    ]}
+                  >
+                    {echoCount}
+                  </Text>
+                ) : null}
+              </Pressable>
+            </View>
           </View>
         </View>
       </Animated.View>
@@ -153,5 +239,19 @@ const styles = StyleSheet.create({
     color: "#9C9C9C",
     fontSize: 12,
     lineHeight: 16,
+  },
+  echoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingLeft: 8,
+  },
+  echoCount: {
+    color: "#4A4A4A",
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  echoCountActive: {
+    color: "#FFFFFF",
   },
 });

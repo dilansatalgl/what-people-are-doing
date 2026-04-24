@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import { useRef, useState } from "react";
 import {
   Image,
   Pressable,
@@ -9,8 +10,11 @@ import {
   Text,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { FeedPost } from "../../components/posts/PostCard";
+import { API_BASE_URL } from "../../constants/api";
+import { publishEchoChange } from "../../utils/echoStore";
 
 const getStringParam = (value: string | string[] | undefined) => {
   if (Array.isArray(value)) {
@@ -65,6 +69,10 @@ export default function PostDetailScreen() {
   const params = useLocalSearchParams<{ post?: string | string[] }>();
   const post = parsePost(params.post);
 
+  const [echoCount, setEchoCount] = useState(post?.echoCount ?? 0);
+  const [hasEchoed, setHasEchoed] = useState(post?.hasEchoed ?? false);
+  const echoInFlight = useRef(false);
+
   if (!post) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -86,6 +94,61 @@ export default function PostDetailScreen() {
     post.locationName ||
     (post.coordinates ? formatCoordinates(post.coordinates) : null);
   const timeLabel = formatPostTime(post.createdAt);
+
+  const handleEchoPress = async () => {
+    if (echoInFlight.current) return;
+    echoInFlight.current = true;
+
+    const prevEchoed = hasEchoed;
+    const prevCount = echoCount;
+    const newEchoCount = Math.max(0, prevCount + (prevEchoed ? -1 : 1));
+
+    setHasEchoed(!prevEchoed);
+    setEchoCount(newEchoCount);
+
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        router.replace("/login");
+        throw new Error("Missing auth token");
+      }
+
+      const method = prevEchoed ? "DELETE" : "POST";
+      const response = await fetch(`${API_BASE_URL}/posts/${post.id}/echo`, {
+        method,
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.status === 401) {
+        router.replace("/login");
+        throw new Error("Unauthorized");
+      }
+
+      const data = (await response.json()) as { echoCount?: number };
+
+      if (!response.ok) {
+        throw new Error("Echo request failed");
+      }
+
+      if (typeof data.echoCount !== "number") {
+        throw new Error("Echo response missing count");
+      }
+
+      setEchoCount(data.echoCount);
+      publishEchoChange({
+        postId: post.id,
+        hasEchoed: !prevEchoed,
+        echoCount: data.echoCount,
+      });
+    } catch {
+      setHasEchoed(prevEchoed);
+      setEchoCount(prevCount);
+    } finally {
+      setTimeout(() => {
+        echoInFlight.current = false;
+      }, 400);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -125,6 +188,28 @@ export default function PostDetailScreen() {
                 <Text style={styles.locationText}>{locationLabel}</Text>
               </View>
             ) : null}
+
+            <View style={styles.echoRow}>
+              <Pressable
+                style={styles.echoButton}
+                onPress={handleEchoPress}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={hasEchoed ? "radio" : "radio-outline"}
+                  size={18}
+                  color={hasEchoed ? "#FFFFFF" : "#4A4A4A"}
+                />
+                <Text
+                  style={[
+                    styles.echoLabel,
+                    hasEchoed && styles.echoLabelActive,
+                  ]}
+                >
+                  {echoCount > 0 ? `${echoCount} ` : ""}Echo
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -223,6 +308,23 @@ const styles = StyleSheet.create({
     color: "#B8B8B8",
     fontSize: 14,
     lineHeight: 20,
+  },
+  echoRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+  },
+  echoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  echoLabel: {
+    color: "#4A4A4A",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  echoLabelActive: {
+    color: "#FFFFFF",
   },
   missingState: {
     flex: 1,

@@ -17,6 +17,7 @@ import { router, usePathname } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PostCard, type FeedPost } from "../../components/posts/PostCard";
 import { API_BASE_URL, FEED_POLL_INTERVAL_MS } from "../../constants/api";
+import { subscribeToEchoChanges } from "../../utils/echoStore";
 
 type FeedApiPost = {
   postId: string;
@@ -28,6 +29,8 @@ type FeedApiPost = {
     longitude: number | null;
     latitude: number | null;
   } | null;
+  echoCount: number;
+  hasEchoed: boolean;
 };
 
 type FeedResponse = {
@@ -197,117 +200,168 @@ export default function FeedScreen() {
     });
   }, []);
 
-  const loadFeed = useCallback(async ({
-    showLoading = false,
-    showRefreshing = false,
-    scrollToTopOnSuccess = false,
-  }: {
-    showLoading?: boolean;
-    showRefreshing?: boolean;
-    scrollToTopOnSuccess?: boolean;
-  } = {}) => {
-    if (requestInFlight.current) {
-      return;
-    }
-
-    requestInFlight.current = true;
-
-    if (showLoading) {
-      setLoading(true);
-    }
-
-    if (showRefreshing) {
-      setRefreshing(true);
-    }
-
-    setErrorMessage(null);
-
-    try {
-      const token = await AsyncStorage.getItem("token");
-
-      if (!token) {
-        router.replace("/login");
+  const loadFeed = useCallback(
+    async ({
+      showLoading = false,
+      showRefreshing = false,
+      scrollToTopOnSuccess = false,
+    }: {
+      showLoading?: boolean;
+      showRefreshing?: boolean;
+      scrollToTopOnSuccess?: boolean;
+    } = {}) => {
+      if (requestInFlight.current) {
         return;
       }
 
-      const response = await fetch(`${API_BASE_URL}/posts/feed`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      requestInFlight.current = true;
+
+      if (showLoading) {
+        setLoading(true);
+      }
+
+      if (showRefreshing) {
+        setRefreshing(true);
+      }
+
+      setErrorMessage(null);
+
+      try {
+        const token = await AsyncStorage.getItem("token");
+
+        if (!token) {
+          router.replace("/login");
+          return;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/posts/feed`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.status === 401) {
+          router.replace("/login");
+          return;
+        }
+
+        const data = (await response.json()) as FeedResponse;
+
+        if (!response.ok) {
+          setErrorMessage(data?.message || "Could not load the feed.");
+          return;
+        }
+
+        setFeedPosts(
+          data.posts.map((post) => ({
+            id: post.postId,
+            text: post.text ?? "",
+            imageUrl: `${API_ORIGIN}${post.image}`,
+            createdAt: post.createdAt,
+            locationName: post.locationName ?? null,
+            coordinates:
+              post.coordinates?.longitude != null &&
+              post.coordinates?.latitude != null
+                ? {
+                    longitude: post.coordinates.longitude,
+                    latitude: post.coordinates.latitude,
+                  }
+                : null,
+            echoCount: post.echoCount ?? 0,
+            hasEchoed: post.hasEchoed ?? false,
+          })),
+        );
+
+        if (scrollToTopOnSuccess && isFeedRouteActive.current) {
+          scrollFeedToTop();
+        }
+
+        if (
+          showRefreshing &&
+          isFeedRouteActive.current &&
+          FEED_POLL_INTERVAL_MS > 0
+        ) {
+          if (pollTimer.current !== null) {
+            clearInterval(pollTimer.current);
+          }
+
+          pollTimer.current = setInterval(() => {
+            void loadFeed({ scrollToTopOnSuccess: true });
+          }, FEED_POLL_INTERVAL_MS);
+        }
+      } catch (error) {
+        console.error("Feed load error:", error);
+        setErrorMessage("Could not connect to the server.");
+      } finally {
+        requestInFlight.current = false;
+
+        if (showLoading) {
+          setLoading(false);
+        }
+
+        if (showRefreshing) {
+          setRefreshing(false);
+        }
+      }
+    },
+    [scrollFeedToTop],
+  );
+
+  const handleOpenPost = useCallback((post: FeedPost) => {
+    router.push({
+      pathname: "/posts/[postId]" as any,
+      params: { postId: post.id, post: JSON.stringify(post) },
+    });
+  }, []);
+
+  const handleEchoStateChange = useCallback(
+    (postId: string, hasEchoed: boolean, echoCount: number) => {
+      setFeedPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, hasEchoed, echoCount } : p)),
+      );
+    },
+    [],
+  );
+
+  useEffect(() => {
+    return subscribeToEchoChanges(({ postId, hasEchoed, echoCount }) => {
+      handleEchoStateChange(postId, hasEchoed, echoCount);
+    });
+  }, [handleEchoStateChange]);
+
+  const handleEchoToggle = useCallback(
+    async (postId: string, currentlyEchoed: boolean) => {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        router.replace("/login");
+        throw new Error("Missing auth token");
+      }
+
+      const method = currentlyEchoed ? "DELETE" : "POST";
+      const response = await fetch(`${API_BASE_URL}/posts/${postId}/echo`, {
+        method,
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (response.status === 401) {
         router.replace("/login");
-        return;
+        throw new Error("Unauthorized");
       }
 
-      const data = (await response.json()) as FeedResponse;
+      const data = (await response.json()) as { echoCount?: number };
 
       if (!response.ok) {
-        setErrorMessage(data?.message || "Could not load the feed.");
-        return;
+        throw new Error("Echo request failed");
       }
 
-      setFeedPosts(
-        data.posts.map((post) => ({
-          id: post.postId,
-          text: post.text ?? "",
-          imageUrl: `${API_ORIGIN}${post.image}`,
-          createdAt: post.createdAt,
-          locationName: post.locationName ?? null,
-          coordinates:
-            post.coordinates?.longitude != null &&
-            post.coordinates?.latitude != null
-              ? {
-                  longitude: post.coordinates.longitude,
-                  latitude: post.coordinates.latitude,
-                }
-              : null,
-        })),
-      );
-
-      if (scrollToTopOnSuccess && isFeedRouteActive.current) {
-        scrollFeedToTop();
+      if (typeof data.echoCount !== "number") {
+        throw new Error("Echo response missing count");
       }
 
-      if (
-        showRefreshing &&
-        isFeedRouteActive.current &&
-        FEED_POLL_INTERVAL_MS > 0
-      ) {
-        if (pollTimer.current !== null) {
-          clearInterval(pollTimer.current);
-        }
-
-        pollTimer.current = setInterval(() => {
-          void loadFeed({ scrollToTopOnSuccess: true });
-        }, FEED_POLL_INTERVAL_MS);
-      }
-    } catch (error) {
-      console.error("Feed load error:", error);
-      setErrorMessage("Could not connect to the server.");
-    } finally {
-      requestInFlight.current = false;
-
-      if (showLoading) {
-        setLoading(false);
-      }
-
-      if (showRefreshing) {
-        setRefreshing(false);
-      }
-    }
-  }, [scrollFeedToTop]);
-
-  const handleOpenPost = useCallback((post: FeedPost) => {
-    router.push({
-      pathname: "/posts/[postId]",
-      params: {
-        postId: post.id,
-        post: JSON.stringify(post),
-      },
-    });
-  }, []);
+      return data.echoCount;
+    },
+    [],
+  );
 
   const stopPolling = useCallback(() => {
     if (pollTimer.current !== null) {
@@ -398,7 +452,9 @@ export default function FeedScreen() {
                 />
               </View>
 
-              <Text style={styles.emptyStateTitle}>Could not load the feed.</Text>
+              <Text style={styles.emptyStateTitle}>
+                Could not load the feed.
+              </Text>
               <Text style={styles.emptyStateText}>{errorMessage}</Text>
 
               <Pressable
@@ -457,23 +513,33 @@ export default function FeedScreen() {
             <Animated.View style={{ height: spacerHeight }} />
             <Text style={styles.feedTitle}>The Pulse</Text>
 
-          <View style={styles.masonryGrid}>
-            <View style={styles.masonryColumn}>
-              {leftColumn.map((post) => (
-                <View key={post.id} style={styles.masonryItem}>
-                  <PostCard post={post} onPress={handleOpenPost} />
-                </View>
-              ))}
-            </View>
+            <View style={styles.masonryGrid}>
+              <View style={styles.masonryColumn}>
+                {leftColumn.map((post) => (
+                  <View key={post.id} style={styles.masonryItem}>
+                    <PostCard
+                      post={post}
+                      onPress={handleOpenPost}
+                      onEchoToggle={handleEchoToggle}
+                      onEchoStateChange={handleEchoStateChange}
+                    />
+                  </View>
+                ))}
+              </View>
 
-            <View style={styles.masonryColumn}>
-              {rightColumn.map((post) => (
-                <View key={post.id} style={styles.masonryItem}>
-                  <PostCard post={post} onPress={handleOpenPost} />
-                </View>
-              ))}
+              <View style={styles.masonryColumn}>
+                {rightColumn.map((post) => (
+                  <View key={post.id} style={styles.masonryItem}>
+                    <PostCard
+                      post={post}
+                      onPress={handleOpenPost}
+                      onEchoToggle={handleEchoToggle}
+                      onEchoStateChange={handleEchoStateChange}
+                    />
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
           </Animated.ScrollView>
         </View>
       )}

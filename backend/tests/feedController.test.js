@@ -74,6 +74,8 @@ test("getRandomFeed returns formatted feed posts", async () => {
         createdAt: mockPosts[0].createdAt,
         expiresAt: mockPosts[0].expiresAt,
         username: "beren",
+        echoCount: 0,
+        hasEchoed: false,
       },
     ],
   });

@@ -1,3 +1,4 @@
+const Echo = require("../models/Echo");
 const Post = require("../models/Post");
 const User = require("../models/User");
 const reverseGeocode = require("../utils/reverseGeocode");
@@ -113,6 +114,7 @@ const deletePost = async (req, res) => {
       });
     }
 
+    await Echo.deleteMany({ post: postId });
     await Post.findByIdAndDelete(postId);
 
     return res.status(200).json({
