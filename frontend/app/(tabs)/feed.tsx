@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -348,7 +349,18 @@ export default function FeedScreen() {
         throw new Error("Unauthorized");
       }
 
-      const data = (await response.json()) as { echoCount?: number };
+      const data = (await response.json()) as {
+        echoCount?: number;
+        message?: string;
+      };
+
+      if (response.status === 429) {
+        Alert.alert(
+          "Slow down",
+          data.message ?? "Too many echo actions. Please try again shortly.",
+        );
+        throw new Error("Echo rate limited");
+      }
 
       if (!response.ok) {
         throw new Error("Echo request failed");
