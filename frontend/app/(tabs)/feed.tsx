@@ -18,6 +18,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PostCard, type FeedPost } from "../../components/posts/PostCard";
 import { API_BASE_URL, FEED_POLL_INTERVAL_MS } from "../../constants/api";
 import { subscribeToEchoChanges } from "../../utils/echoStore";
+import { subscribeToReactionChanges } from "../../utils/reactionStore";
+import {
+  emptyReactionCounts,
+  type ReactionCounts,
+  type ReactionType,
+} from "../../utils/reactionTypes";
 
 type FeedApiPost = {
   postId: string;
@@ -31,6 +37,8 @@ type FeedApiPost = {
   } | null;
   echoCount: number;
   hasEchoed: boolean;
+  reactionCounts?: Partial<ReactionCounts>;
+  userReaction?: ReactionType | null;
 };
 
 type FeedResponse = {
@@ -269,6 +277,11 @@ export default function FeedScreen() {
                 : null,
             echoCount: post.echoCount ?? 0,
             hasEchoed: post.hasEchoed ?? false,
+            reactionCounts: {
+              ...emptyReactionCounts(),
+              ...(post.reactionCounts ?? {}),
+            },
+            userReaction: post.userReaction ?? null,
           })),
         );
 
@@ -323,11 +336,34 @@ export default function FeedScreen() {
     [],
   );
 
+  const handleReactionStateChange = useCallback(
+    (
+      postId: string,
+      userReaction: ReactionType | null,
+      reactionCounts: ReactionCounts,
+    ) => {
+      setFeedPosts((prev) =>
+        prev.map((p) =>
+          p.id === postId ? { ...p, userReaction, reactionCounts } : p,
+        ),
+      );
+    },
+    [],
+  );
+
   useEffect(() => {
     return subscribeToEchoChanges(({ postId, hasEchoed, echoCount }) => {
       handleEchoStateChange(postId, hasEchoed, echoCount);
     });
   }, [handleEchoStateChange]);
+
+  useEffect(() => {
+    return subscribeToReactionChanges(
+      ({ postId, userReaction, reactionCounts }) => {
+        handleReactionStateChange(postId, userReaction, reactionCounts);
+      },
+    );
+  }, [handleReactionStateChange]);
 
   const handleEchoToggle = useCallback(
     async (postId: string, currentlyEchoed: boolean) => {
@@ -359,6 +395,52 @@ export default function FeedScreen() {
       }
 
       return data.echoCount;
+    },
+    [],
+  );
+
+  const handleReactionChange = useCallback(
+    async (postId: string, nextReaction: ReactionType | null) => {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        router.replace("/login");
+        throw new Error("Missing auth token");
+      }
+
+      const isRemoval = nextReaction === null;
+      const response = await fetch(
+        `${API_BASE_URL}/posts/${postId}/reaction`,
+        {
+          method: isRemoval ? "DELETE" : "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: isRemoval ? undefined : JSON.stringify({ type: nextReaction }),
+        },
+      );
+
+      if (response.status === 401) {
+        router.replace("/login");
+        throw new Error("Unauthorized");
+      }
+
+      const data = (await response.json()) as {
+        userReaction?: ReactionType | null;
+        reactionCounts?: Partial<ReactionCounts>;
+      };
+
+      if (!response.ok) {
+        throw new Error("Reaction request failed");
+      }
+
+      return {
+        userReaction: data.userReaction ?? null,
+        reactionCounts: {
+          ...emptyReactionCounts(),
+          ...(data.reactionCounts ?? {}),
+        },
+      };
     },
     [],
   );
@@ -522,6 +604,8 @@ export default function FeedScreen() {
                       onPress={handleOpenPost}
                       onEchoToggle={handleEchoToggle}
                       onEchoStateChange={handleEchoStateChange}
+                      onReactionChange={handleReactionChange}
+                      onReactionStateChange={handleReactionStateChange}
                     />
                   </View>
                 ))}
@@ -535,6 +619,8 @@ export default function FeedScreen() {
                       onPress={handleOpenPost}
                       onEchoToggle={handleEchoToggle}
                       onEchoStateChange={handleEchoStateChange}
+                      onReactionChange={handleReactionChange}
+                      onReactionStateChange={handleReactionStateChange}
                     />
                   </View>
                 ))}

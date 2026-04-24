@@ -43,6 +43,14 @@ const postSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    reactionCounts: {
+      love: { type: Number, default: 0 },
+      laugh: { type: Number, default: 0 },
+      wow: { type: Number, default: 0 },
+      sad: { type: Number, default: 0 },
+      cry: { type: Number, default: 0 },
+      like: { type: Number, default: 0 },
+    },
     expiresAt: {
       type: Date,
       required: true,

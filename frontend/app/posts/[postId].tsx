@@ -13,8 +13,18 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { FeedPost } from "../../components/posts/PostCard";
+import { ReactionPicker } from "../../components/posts/ReactionPicker";
 import { API_BASE_URL } from "../../constants/api";
 import { publishEchoChange } from "../../utils/echoStore";
+import { publishReactionChange } from "../../utils/reactionStore";
+import {
+  REACTION_EMOJI,
+  emptyReactionCounts,
+  topReaction,
+  totalReactionCount,
+  type ReactionCounts,
+  type ReactionType,
+} from "../../utils/reactionTypes";
 
 const getStringParam = (value: string | string[] | undefined) => {
   if (Array.isArray(value)) {
@@ -71,7 +81,15 @@ export default function PostDetailScreen() {
 
   const [echoCount, setEchoCount] = useState(post?.echoCount ?? 0);
   const [hasEchoed, setHasEchoed] = useState(post?.hasEchoed ?? false);
+  const [reactionCounts, setReactionCounts] = useState<ReactionCounts>(
+    post?.reactionCounts ?? emptyReactionCounts(),
+  );
+  const [userReaction, setUserReaction] = useState<ReactionType | null>(
+    post?.userReaction ?? null,
+  );
+  const [pickerVisible, setPickerVisible] = useState(false);
   const echoInFlight = useRef(false);
+  const reactionInFlight = useRef(false);
 
   if (!post) {
     return (
@@ -150,6 +168,97 @@ export default function PostDetailScreen() {
     }
   };
 
+  const applyOptimisticReaction = (next: ReactionType | null) => {
+    const draft = { ...reactionCounts };
+    if (userReaction && draft[userReaction] > 0) {
+      draft[userReaction] -= 1;
+    }
+    if (next) {
+      draft[next] = (draft[next] ?? 0) + 1;
+    }
+    return draft;
+  };
+
+  const handleReactionSelect = async (nextType: ReactionType) => {
+    setPickerVisible(false);
+
+    if (reactionInFlight.current) return;
+    reactionInFlight.current = true;
+
+    const prevReaction = userReaction;
+    const prevCounts = reactionCounts;
+    const isSame = prevReaction === nextType;
+    const nextReaction: ReactionType | null = isSame ? null : nextType;
+    const optimisticCounts = applyOptimisticReaction(nextReaction);
+
+    setUserReaction(nextReaction);
+    setReactionCounts(optimisticCounts);
+
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        router.replace("/login");
+        throw new Error("Missing auth token");
+      }
+
+      const isRemoval = nextReaction === null;
+      const response = await fetch(
+        `${API_BASE_URL}/posts/${post.id}/reaction`,
+        {
+          method: isRemoval ? "DELETE" : "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: isRemoval ? undefined : JSON.stringify({ type: nextReaction }),
+        },
+      );
+
+      if (response.status === 401) {
+        router.replace("/login");
+        throw new Error("Unauthorized");
+      }
+
+      const data = (await response.json()) as {
+        userReaction?: ReactionType | null;
+        reactionCounts?: Partial<ReactionCounts>;
+      };
+
+      if (!response.ok) {
+        throw new Error("Reaction request failed");
+      }
+
+      const mergedCounts: ReactionCounts = {
+        ...emptyReactionCounts(),
+        ...(data.reactionCounts ?? {}),
+      };
+      const serverReaction = data.userReaction ?? null;
+
+      setUserReaction(serverReaction);
+      setReactionCounts(mergedCounts);
+      publishReactionChange({
+        postId: post.id,
+        userReaction: serverReaction,
+        reactionCounts: mergedCounts,
+      });
+    } catch {
+      setUserReaction(prevReaction);
+      setReactionCounts(prevCounts);
+    } finally {
+      setTimeout(() => {
+        reactionInFlight.current = false;
+      }, 300);
+    }
+  };
+
+  const totalReactions = totalReactionCount(reactionCounts);
+  const top = topReaction(reactionCounts);
+  const summaryEmoji = userReaction
+    ? REACTION_EMOJI[userReaction]
+    : top
+      ? REACTION_EMOJI[top.type]
+      : null;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
@@ -189,7 +298,35 @@ export default function PostDetailScreen() {
               </View>
             ) : null}
 
-            <View style={styles.echoRow}>
+            <View style={styles.actionRow}>
+              <Pressable
+                style={[
+                  styles.reactionSummary,
+                  userReaction && styles.reactionSummaryActive,
+                ]}
+                onPress={() => setPickerVisible(true)}
+                onLongPress={() => setPickerVisible(true)}
+                hitSlop={8}
+              >
+                {summaryEmoji ? (
+                  <Text style={styles.reactionSummaryEmoji}>
+                    {summaryEmoji}
+                  </Text>
+                ) : (
+                  <Ionicons name="happy-outline" size={18} color="#8F8F8F" />
+                )}
+                <Text
+                  style={[
+                    styles.reactionSummaryLabel,
+                    userReaction && styles.reactionSummaryLabelActive,
+                  ]}
+                >
+                  {totalReactions > 0
+                    ? `${totalReactions} react${totalReactions === 1 ? "" : "s"}`
+                    : "React"}
+                </Text>
+              </Pressable>
+
               <Pressable
                 style={styles.echoButton}
                 onPress={handleEchoPress}
@@ -213,6 +350,15 @@ export default function PostDetailScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <ReactionPicker
+        visible={pickerVisible}
+        imageUrl={post.imageUrl}
+        caption={post.text}
+        currentReaction={userReaction}
+        onSelect={handleReactionSelect}
+        onDismiss={() => setPickerVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -312,6 +458,36 @@ const styles = StyleSheet.create({
   echoRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
+  },
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  reactionSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#1A1A1A",
+  },
+  reactionSummaryActive: {
+    backgroundColor: "#2A2A2A",
+  },
+  reactionSummaryEmoji: {
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  reactionSummaryLabel: {
+    color: "#9C9C9C",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  reactionSummaryLabelActive: {
+    color: "#FFFFFF",
   },
   echoButton: {
     flexDirection: "row",

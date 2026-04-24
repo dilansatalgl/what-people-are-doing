@@ -8,6 +8,15 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { ReactionPicker } from "./ReactionPicker";
+import {
+  REACTION_EMOJI,
+  emptyReactionCounts,
+  topReaction,
+  totalReactionCount,
+  type ReactionCounts,
+  type ReactionType,
+} from "../../utils/reactionTypes";
 
 type FeedCoordinates = {
   longitude: number;
@@ -23,6 +32,13 @@ export type FeedPost = {
   createdAt: string;
   echoCount: number;
   hasEchoed: boolean;
+  reactionCounts: ReactionCounts;
+  userReaction: ReactionType | null;
+};
+
+type ReactionResult = {
+  userReaction: ReactionType | null;
+  reactionCounts: ReactionCounts;
 };
 
 type PostCardProps = {
@@ -33,6 +49,15 @@ type PostCardProps = {
     postId: string,
     hasEchoed: boolean,
     echoCount: number,
+  ) => void;
+  onReactionChange?: (
+    postId: string,
+    nextReaction: ReactionType | null,
+  ) => Promise<ReactionResult>;
+  onReactionStateChange?: (
+    postId: string,
+    userReaction: ReactionType | null,
+    reactionCounts: ReactionCounts,
   ) => void;
 };
 
@@ -49,11 +74,21 @@ export function PostCard({
   onPress,
   onEchoToggle,
   onEchoStateChange,
+  onReactionChange,
+  onReactionStateChange,
 }: PostCardProps) {
   const [isPressed, setIsPressed] = useState(false);
   const [echoCount, setEchoCount] = useState(post.echoCount);
   const [hasEchoed, setHasEchoed] = useState(post.hasEchoed);
+  const [reactionCounts, setReactionCounts] = useState<ReactionCounts>(
+    post.reactionCounts ?? emptyReactionCounts(),
+  );
+  const [userReaction, setUserReaction] = useState<ReactionType | null>(
+    post.userReaction ?? null,
+  );
+  const [pickerVisible, setPickerVisible] = useState(false);
   const echoInFlight = useRef(false);
+  const reactionInFlight = useRef(false);
   const pressAnimation = useRef(new Animated.Value(0)).current;
   const locationLabel =
     post.locationName ||
@@ -62,7 +97,14 @@ export function PostCard({
   useEffect(() => {
     setEchoCount(post.echoCount);
     setHasEchoed(post.hasEchoed);
-  }, [post.echoCount, post.hasEchoed]);
+    setReactionCounts(post.reactionCounts ?? emptyReactionCounts());
+    setUserReaction(post.userReaction ?? null);
+  }, [
+    post.echoCount,
+    post.hasEchoed,
+    post.reactionCounts,
+    post.userReaction,
+  ]);
 
   const animatedCardStyle = {
     transform: [
@@ -126,72 +168,192 @@ export function PostCard({
     }
   };
 
+  const applyOptimisticReaction = (next: ReactionType | null) => {
+    const draft = { ...reactionCounts };
+    if (userReaction && draft[userReaction] > 0) {
+      draft[userReaction] -= 1;
+    }
+    if (next) {
+      draft[next] = (draft[next] ?? 0) + 1;
+    }
+    return draft;
+  };
+
+  const handleReactionSelect = async (nextType: ReactionType) => {
+    setPickerVisible(false);
+
+    if (!onReactionChange || reactionInFlight.current) return;
+    reactionInFlight.current = true;
+
+    const prevReaction = userReaction;
+    const prevCounts = reactionCounts;
+    const isSame = prevReaction === nextType;
+    const nextReaction: ReactionType | null = isSame ? null : nextType;
+    const optimisticCounts = applyOptimisticReaction(nextReaction);
+
+    setUserReaction(nextReaction);
+    setReactionCounts(optimisticCounts);
+    onReactionStateChange?.(post.id, nextReaction, optimisticCounts);
+
+    try {
+      const result = await onReactionChange(post.id, nextReaction);
+      setUserReaction(result.userReaction);
+      setReactionCounts(result.reactionCounts);
+      onReactionStateChange?.(
+        post.id,
+        result.userReaction,
+        result.reactionCounts,
+      );
+    } catch {
+      setUserReaction(prevReaction);
+      setReactionCounts(prevCounts);
+      onReactionStateChange?.(post.id, prevReaction, prevCounts);
+    } finally {
+      setTimeout(() => {
+        reactionInFlight.current = false;
+      }, 300);
+    }
+  };
+
+  const handleLongPress = () => {
+    if (!onReactionChange) return;
+    setPickerVisible(true);
+  };
+
+  const total = totalReactionCount(reactionCounts);
+  const top = topReaction(reactionCounts);
+  const summaryEmoji = userReaction
+    ? REACTION_EMOJI[userReaction]
+    : top
+      ? REACTION_EMOJI[top.type]
+      : null;
+
   return (
-    <Pressable
-      onPress={() => onPress?.(post)}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-    >
-      <Animated.View
-        style={[
-          styles.cardWrap,
-          isPressed && styles.cardWrapRaised,
-          animatedCardStyle,
-        ]}
+    <>
+      <Pressable
+        onPress={() => onPress?.(post)}
+        onLongPress={handleLongPress}
+        delayLongPress={280}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
       >
-        <View style={styles.card}>
-          <Image source={{ uri: post.imageUrl }} style={styles.image} />
+        <Animated.View
+          style={[
+            styles.cardWrap,
+            isPressed && styles.cardWrapRaised,
+            animatedCardStyle,
+          ]}
+        >
+          <View style={styles.card}>
+            <Image source={{ uri: post.imageUrl }} style={styles.image} />
 
-          <View style={styles.body}>
-            {post.text ? (
-              <Text style={styles.postText}>{post.text}</Text>
-            ) : null}
+            <View style={styles.body}>
+              {post.text ? (
+                <Text style={styles.postText}>{post.text}</Text>
+              ) : null}
 
-            <View style={styles.metaRow}>
-              {locationLabel ? (
-                <View style={styles.locationRow}>
-                  <Ionicons name="location-outline" size={13} color="#8F8F8F" />
-                  <Text
-                    style={styles.locationText}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                  >
-                    {locationLabel}
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.locationRow} />
-              )}
+              <View style={styles.metaRow}>
+                {locationLabel ? (
+                  <View style={styles.locationRow}>
+                    <Ionicons
+                      name="location-outline"
+                      size={13}
+                      color="#8F8F8F"
+                    />
+                    <Text
+                      style={styles.locationText}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {locationLabel}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.locationRow} />
+                )}
 
-              <Pressable
-                style={styles.echoButton}
-                onPress={(event) => {
-                  event.stopPropagation();
-                  void handleEchoPress();
-                }}
-                hitSlop={8}
-              >
-                <Ionicons
-                  name={hasEchoed ? "radio" : "radio-outline"}
-                  size={15}
-                  color={hasEchoed ? "#FFFFFF" : "#4A4A4A"}
-                />
-                {echoCount > 0 ? (
-                  <Text
+                {summaryEmoji ? (
+                  <Pressable
                     style={[
-                      styles.echoCount,
-                      hasEchoed && styles.echoCountActive,
+                      styles.reactionSummary,
+                      userReaction && styles.reactionSummaryActive,
                     ]}
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      setPickerVisible(true);
+                    }}
+                    hitSlop={8}
                   >
-                    {echoCount}
-                  </Text>
-                ) : null}
-              </Pressable>
+                    <Text style={styles.reactionSummaryEmoji}>
+                      {summaryEmoji}
+                    </Text>
+                    {total > 0 ? (
+                      <Text
+                        style={[
+                          styles.reactionSummaryCount,
+                          userReaction && styles.reactionSummaryCountActive,
+                        ]}
+                      >
+                        {total}
+                      </Text>
+                    ) : null}
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    style={styles.reactionAddButton}
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      setPickerVisible(true);
+                    }}
+                    hitSlop={8}
+                  >
+                    <Ionicons
+                      name="happy-outline"
+                      size={15}
+                      color="#8F8F8F"
+                    />
+                  </Pressable>
+                )}
+
+                <Pressable
+                  style={styles.echoButton}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    void handleEchoPress();
+                  }}
+                  hitSlop={8}
+                >
+                  <Ionicons
+                    name={hasEchoed ? "radio" : "radio-outline"}
+                    size={15}
+                    color={hasEchoed ? "#FFFFFF" : "#4A4A4A"}
+                  />
+                  {echoCount > 0 ? (
+                    <Text
+                      style={[
+                        styles.echoCount,
+                        hasEchoed && styles.echoCountActive,
+                      ]}
+                    >
+                      {echoCount}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              </View>
             </View>
           </View>
-        </View>
-      </Animated.View>
-    </Pressable>
+        </Animated.View>
+      </Pressable>
+
+      <ReactionPicker
+        visible={pickerVisible}
+        imageUrl={post.imageUrl}
+        caption={post.text}
+        currentReaction={userReaction}
+        onSelect={handleReactionSelect}
+        onDismiss={() => setPickerVisible(false)}
+      />
+    </>
   );
 }
 
@@ -239,6 +401,36 @@ const styles = StyleSheet.create({
     color: "#9C9C9C",
     fontSize: 12,
     lineHeight: 16,
+  },
+  reactionSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "#1A1A1A",
+    marginRight: 8,
+  },
+  reactionSummaryActive: {
+    backgroundColor: "#2A2A2A",
+  },
+  reactionSummaryEmoji: {
+    fontSize: 14,
+    lineHeight: 16,
+  },
+  reactionSummaryCount: {
+    color: "#9C9C9C",
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  reactionSummaryCountActive: {
+    color: "#FFFFFF",
+  },
+  reactionAddButton: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    marginRight: 6,
   },
   echoButton: {
     flexDirection: "row",

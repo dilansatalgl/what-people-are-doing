@@ -4,6 +4,7 @@ const multer = require("multer");
 
 const { createPost, deletePost } = require("../controllers/postController");
 const { echoPost, unechoPost } = require("../controllers/echoController");
+const { setReaction, removeReaction } = require("../controllers/reactionController");
 const authMiddleware = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
 const { getRandomFeed } = require("../controllers/feedController");
@@ -36,6 +37,8 @@ router.post("/", authMiddleware, (req, res, next) => {
 router.delete("/:postId", authMiddleware, deletePost);
 router.post("/:postId/echo", authMiddleware, echoPost);
 router.delete("/:postId/echo", authMiddleware, unechoPost);
+router.put("/:postId/reaction", authMiddleware, setReaction);
+router.delete("/:postId/reaction", authMiddleware, removeReaction);
 router.get("/feed", authMiddleware, feedRateLimiter, getRandomFeed);
 
 module.exports = router;

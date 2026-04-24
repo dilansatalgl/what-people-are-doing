@@ -1,6 +1,16 @@
 const mongoose = require("mongoose");
 const Echo = require("../models/Echo");
 const Post = require("../models/Post");
+const Reaction = require("../models/Reaction");
+const { REACTION_TYPES } = require("../models/Reaction");
+
+const buildReactionCounts = (stored) => {
+  const counts = {};
+  for (const type of REACTION_TYPES) {
+    counts[type] = Math.max(0, stored?.[type] ?? 0);
+  }
+  return counts;
+};
 
 const getRandomFeed = async (req, res) => {
   try {
@@ -48,6 +58,26 @@ const getRandomFeed = async (req, res) => {
         },
       },
       {
+        $lookup: {
+          from: Reaction.collection.name,
+          let: { postId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$post", "$$postId"] },
+                    { $eq: ["$user", new mongoose.Types.ObjectId(currentUserId)] },
+                  ],
+                },
+              },
+            },
+            { $limit: 1 },
+          ],
+          as: "userReactionDoc",
+        },
+      },
+      {
         $project: {
           _id: 1,
           text: 1,
@@ -55,10 +85,14 @@ const getRandomFeed = async (req, res) => {
           createdAt: 1,
           expiresAt: 1,
           echoCount: 1,
+          reactionCounts: 1,
           "location.name": 1,
           "location.coordinates": 1,
           username: "$userInfo.username",
           hasEchoed: { $gt: [{ $size: "$userEcho" }, 0] },
+          userReaction: {
+            $ifNull: [{ $arrayElemAt: ["$userReactionDoc.type", 0] }, null],
+          },
         },
       },
     ]);
@@ -77,6 +111,8 @@ const getRandomFeed = async (req, res) => {
       username: post.username,
       echoCount: post.echoCount ?? 0,
       hasEchoed: post.hasEchoed ?? false,
+      reactionCounts: buildReactionCounts(post.reactionCounts),
+      userReaction: post.userReaction ?? null,
     }));
 
     return res.status(200).json({
