@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 type FeedCoordinates = {
@@ -14,11 +14,15 @@ export type FeedPost = {
   locationName: string | null;
   coordinates: FeedCoordinates | null;
   createdAt: string;
+  echoCount: number;
+  hasEchoed: boolean;
 };
 
 type PostCardProps = {
   post: FeedPost;
   onPress?: (post: FeedPost) => void;
+  onEchoToggle?: (postId: string, currentlyEchoed: boolean) => Promise<void>;
+  onEchoStateChange?: (postId: string, hasEchoed: boolean, echoCount: number) => void;
 };
 
 const formatCoordinates = ({
@@ -29,8 +33,11 @@ const formatCoordinates = ({
   longitude: number;
 }) => `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
 
-export function PostCard({ post, onPress }: PostCardProps) {
+export function PostCard({ post, onPress, onEchoToggle, onEchoStateChange }: PostCardProps) {
   const [isPressed, setIsPressed] = useState(false);
+  const [echoCount, setEchoCount] = useState(post.echoCount);
+  const [hasEchoed, setHasEchoed] = useState(post.hasEchoed);
+  const [echoLoading, setEchoLoading] = useState(false);
   const pressAnimation = useRef(new Animated.Value(0)).current;
   const locationLabel =
     post.locationName ||
@@ -69,6 +76,33 @@ export function PostCard({ post, onPress }: PostCardProps) {
     });
   };
 
+  const handleEchoPress = async () => {
+    if (echoLoading || !onEchoToggle) return;
+
+    if (hasEchoed) {
+      Alert.alert("Already echoed", "You've already echoed this post.");
+      return;
+    }
+
+    const prevCount = echoCount;
+    const newCount = prevCount + 1;
+
+    setHasEchoed(true);
+    setEchoCount(newCount);
+    setEchoLoading(true);
+    onEchoStateChange?.(post.id, true, newCount);
+
+    try {
+      await onEchoToggle(post.id, false);
+    } catch {
+      setHasEchoed(false);
+      setEchoCount(prevCount);
+      onEchoStateChange?.(post.id, false, prevCount);
+    } finally {
+      setEchoLoading(false);
+    }
+  };
+
   return (
     <Pressable
       onPress={() => onPress?.(post)}
@@ -88,8 +122,8 @@ export function PostCard({ post, onPress }: PostCardProps) {
           <View style={styles.body}>
             {post.text ? <Text style={styles.postText}>{post.text}</Text> : null}
 
-            {locationLabel ? (
-              <View style={styles.metaRow}>
+            <View style={styles.metaRow}>
+              {locationLabel ? (
                 <View style={styles.locationRow}>
                   <Ionicons name="location-outline" size={13} color="#8F8F8F" />
                   <Text
@@ -100,8 +134,27 @@ export function PostCard({ post, onPress }: PostCardProps) {
                     {locationLabel}
                   </Text>
                 </View>
-              </View>
-            ) : null}
+              ) : (
+                <View style={styles.locationRow} />
+              )}
+
+              <Pressable
+                style={styles.echoButton}
+                onPress={handleEchoPress}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={hasEchoed ? "radio" : "radio-outline"}
+                  size={15}
+                  color={hasEchoed ? "#FFFFFF" : "#4A4A4A"}
+                />
+                {echoCount > 0 ? (
+                  <Text style={[styles.echoCount, hasEchoed && styles.echoCountActive]}>
+                    {echoCount}
+                  </Text>
+                ) : null}
+              </Pressable>
+            </View>
           </View>
         </View>
       </Animated.View>
@@ -153,5 +206,19 @@ const styles = StyleSheet.create({
     color: "#9C9C9C",
     fontSize: 12,
     lineHeight: 16,
+  },
+  echoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingLeft: 8,
+  },
+  echoCount: {
+    color: "#4A4A4A",
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  echoCountActive: {
+    color: "#FFFFFF",
   },
 });

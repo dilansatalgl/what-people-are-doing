@@ -1,6 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
 import {
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -9,8 +11,10 @@ import {
   Text,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { FeedPost } from "../../components/posts/PostCard";
+import { API_BASE_URL } from "../../constants/api";
 
 const getStringParam = (value: string | string[] | undefined) => {
   if (Array.isArray(value)) {
@@ -65,6 +69,10 @@ export default function PostDetailScreen() {
   const params = useLocalSearchParams<{ post?: string | string[] }>();
   const post = parsePost(params.post);
 
+  const [echoCount, setEchoCount] = useState(post?.echoCount ?? 0);
+  const [hasEchoed, setHasEchoed] = useState(post?.hasEchoed ?? false);
+  const [echoLoading, setEchoLoading] = useState(false);
+
   if (!post) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -86,6 +94,48 @@ export default function PostDetailScreen() {
     post.locationName ||
     (post.coordinates ? formatCoordinates(post.coordinates) : null);
   const timeLabel = formatPostTime(post.createdAt);
+
+  const handleEchoPress = async () => {
+    if (echoLoading) return;
+
+    if (hasEchoed) {
+      Alert.alert("Already echoed", "You've already echoed this post.");
+      return;
+    }
+
+    const prevCount = echoCount;
+
+    setHasEchoed(true);
+    setEchoCount(prevCount + 1);
+    setEchoLoading(true);
+
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        router.replace("/login");
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/posts/${post.id}/echo`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.status === 401) {
+        router.replace("/login");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Echo request failed");
+      }
+    } catch {
+      setHasEchoed(false);
+      setEchoCount(prevCount);
+    } finally {
+      setEchoLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -125,6 +175,19 @@ export default function PostDetailScreen() {
                 <Text style={styles.locationText}>{locationLabel}</Text>
               </View>
             ) : null}
+
+            <View style={styles.echoRow}>
+              <Pressable style={styles.echoButton} onPress={handleEchoPress} hitSlop={8}>
+                <Ionicons
+                  name={hasEchoed ? "radio" : "radio-outline"}
+                  size={18}
+                  color={hasEchoed ? "#FFFFFF" : "#4A4A4A"}
+                />
+                <Text style={[styles.echoLabel, hasEchoed && styles.echoLabelActive]}>
+                  {echoCount > 0 ? `${echoCount} ` : ""}Echo
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -223,6 +286,23 @@ const styles = StyleSheet.create({
     color: "#B8B8B8",
     fontSize: 14,
     lineHeight: 20,
+  },
+  echoRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+  },
+  echoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  echoLabel: {
+    color: "#4A4A4A",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  echoLabelActive: {
+    color: "#FFFFFF",
   },
   missingState: {
     flex: 1,

@@ -27,15 +27,37 @@ const getRandomFeed = async (req, res) => {
         $unwind: "$userInfo",
       },
       {
+        $lookup: {
+          from: "echoes",
+          let: { postId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$post", "$$postId"] },
+                    { $eq: ["$user", new mongoose.Types.ObjectId(currentUserId)] },
+                  ],
+                },
+              },
+            },
+            { $limit: 1 },
+          ],
+          as: "userEcho",
+        },
+      },
+      {
         $project: {
           _id: 1,
           text: 1,
           image: 1,
           createdAt: 1,
           expiresAt: 1,
+          echoCount: 1,
           "location.name": 1,
           "location.coordinates": 1,
           username: "$userInfo.username",
+          hasEchoed: { $gt: [{ $size: "$userEcho" }, 0] },
         },
       },
     ]);
@@ -52,6 +74,8 @@ const getRandomFeed = async (req, res) => {
       createdAt: post.createdAt,
       expiresAt: post.expiresAt,
       username: post.username,
+      echoCount: post.echoCount ?? 0,
+      hasEchoed: post.hasEchoed ?? false,
     }));
 
     return res.status(200).json({

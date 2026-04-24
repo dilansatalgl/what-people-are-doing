@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require("multer");
 
 const { createPost, deletePost } = require("../controllers/postController");
+const { echoPost, unechoPost } = require("../controllers/echoController");
 const authMiddleware = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
 const { getRandomFeed } = require("../controllers/feedController");
@@ -33,6 +34,8 @@ router.post("/", authMiddleware, (req, res, next) => {
 }, createPost);
 
 router.delete("/:postId", authMiddleware, deletePost);
+router.post("/:postId/echo", authMiddleware, echoPost);
+router.delete("/:postId/echo", authMiddleware, unechoPost);
 router.get("/feed", authMiddleware, feedRateLimiter, getRandomFeed);
 
 module.exports = router;
