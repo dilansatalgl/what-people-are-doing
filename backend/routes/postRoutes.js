@@ -6,7 +6,7 @@ const { createPost, deletePost } = require("../controllers/postController");
 const { echoPost, unechoPost } = require("../controllers/echoController");
 const authMiddleware = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
-const { getRandomFeed } = require("../controllers/feedController");
+const { getRandomFeed, getNearbyFeed } = require("../controllers/feedController");
 const feedRateLimiter = require("../middleware/feedRateLimiter");
 const echoRateLimiter = require("../middleware/echoRateLimiter");
 
@@ -38,5 +38,6 @@ router.delete("/:postId", authMiddleware, deletePost);
 router.post("/:postId/echo", authMiddleware, echoRateLimiter, echoPost);
 router.delete("/:postId/echo", authMiddleware, echoRateLimiter, unechoPost);
 router.get("/feed", authMiddleware, feedRateLimiter, getRandomFeed);
+router.get("/feed/nearby", authMiddleware, feedRateLimiter, getNearbyFeed);
 
 module.exports = router;
