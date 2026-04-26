@@ -89,6 +89,14 @@ export function PostCard({
   const [pickerVisible, setPickerVisible] = useState(false);
   const echoInFlight = useRef(false);
   const reactionInFlight = useRef(false);
+  const hasPendingReaction = useRef(false);
+  const pendingReactionTarget = useRef<ReactionType | null>(null);
+  const latestReactionRef = useRef<ReactionType | null>(
+    post.userReaction ?? null,
+  );
+  const latestCountsRef = useRef<ReactionCounts>(
+    post.reactionCounts ?? emptyReactionCounts(),
+  );
   const pressAnimation = useRef(new Animated.Value(0)).current;
   const locationLabel =
     post.locationName ||
@@ -97,8 +105,14 @@ export function PostCard({
   useEffect(() => {
     setEchoCount(post.echoCount);
     setHasEchoed(post.hasEchoed);
-    setReactionCounts(post.reactionCounts ?? emptyReactionCounts());
-    setUserReaction(post.userReaction ?? null);
+    if (!reactionInFlight.current && !hasPendingReaction.current) {
+      const nextCounts = post.reactionCounts ?? emptyReactionCounts();
+      const nextReaction = post.userReaction ?? null;
+      setReactionCounts(nextCounts);
+      setUserReaction(nextReaction);
+      latestCountsRef.current = nextCounts;
+      latestReactionRef.current = nextReaction;
+    }
   }, [
     post.echoCount,
     post.hasEchoed,
@@ -168,10 +182,14 @@ export function PostCard({
     }
   };
 
-  const applyOptimisticReaction = (next: ReactionType | null) => {
-    const draft = { ...reactionCounts };
-    if (userReaction && draft[userReaction] > 0) {
-      draft[userReaction] -= 1;
+  const computeOptimisticCounts = (
+    from: ReactionCounts,
+    current: ReactionType | null,
+    next: ReactionType | null,
+  ) => {
+    const draft = { ...from };
+    if (current && draft[current] > 0) {
+      draft[current] -= 1;
     }
     if (next) {
       draft[next] = (draft[next] ?? 0) + 1;
@@ -181,38 +199,66 @@ export function PostCard({
 
   const handleReactionSelect = async (nextType: ReactionType) => {
     setPickerVisible(false);
+    if (!onReactionChange) return;
 
-    if (!onReactionChange || reactionInFlight.current) return;
-    reactionInFlight.current = true;
+    const currentReaction = latestReactionRef.current;
+    const currentCounts = latestCountsRef.current;
+    const target: ReactionType | null =
+      currentReaction === nextType ? null : nextType;
+    const optimisticCounts = computeOptimisticCounts(
+      currentCounts,
+      currentReaction,
+      target,
+    );
 
-    const prevReaction = userReaction;
-    const prevCounts = reactionCounts;
-    const isSame = prevReaction === nextType;
-    const nextReaction: ReactionType | null = isSame ? null : nextType;
-    const optimisticCounts = applyOptimisticReaction(nextReaction);
-
-    setUserReaction(nextReaction);
+    latestReactionRef.current = target;
+    latestCountsRef.current = optimisticCounts;
+    setUserReaction(target);
     setReactionCounts(optimisticCounts);
-    onReactionStateChange?.(post.id, nextReaction, optimisticCounts);
+    onReactionStateChange?.(post.id, target, optimisticCounts);
 
-    try {
-      const result = await onReactionChange(post.id, nextReaction);
-      setUserReaction(result.userReaction);
-      setReactionCounts(result.reactionCounts);
-      onReactionStateChange?.(
-        post.id,
-        result.userReaction,
-        result.reactionCounts,
-      );
-    } catch {
-      setUserReaction(prevReaction);
-      setReactionCounts(prevCounts);
-      onReactionStateChange?.(post.id, prevReaction, prevCounts);
-    } finally {
-      setTimeout(() => {
-        reactionInFlight.current = false;
-      }, 300);
+    if (reactionInFlight.current) {
+      hasPendingReaction.current = true;
+      pendingReactionTarget.current = target;
+      return;
     }
+
+    reactionInFlight.current = true;
+    let toSend: ReactionType | null = target;
+    let rollbackReaction: ReactionType | null = currentReaction;
+    let rollbackCounts: ReactionCounts = currentCounts;
+
+    while (true) {
+      try {
+        const result = await onReactionChange(post.id, toSend);
+        rollbackReaction = result.userReaction;
+        rollbackCounts = result.reactionCounts;
+        if (!hasPendingReaction.current) {
+          latestReactionRef.current = result.userReaction;
+          latestCountsRef.current = result.reactionCounts;
+          setUserReaction(result.userReaction);
+          setReactionCounts(result.reactionCounts);
+          onReactionStateChange?.(
+            post.id,
+            result.userReaction,
+            result.reactionCounts,
+          );
+          break;
+        }
+      } catch {
+        latestReactionRef.current = rollbackReaction;
+        latestCountsRef.current = rollbackCounts;
+        setUserReaction(rollbackReaction);
+        setReactionCounts(rollbackCounts);
+        onReactionStateChange?.(post.id, rollbackReaction, rollbackCounts);
+        hasPendingReaction.current = false;
+        break;
+      }
+      toSend = pendingReactionTarget.current;
+      hasPendingReaction.current = false;
+    }
+
+    reactionInFlight.current = false;
   };
 
   const handleLongPress = () => {

@@ -59,7 +59,7 @@ const setReaction = async (req, res) => {
             [`reactionCounts.${type}`]: 1,
           },
         },
-        { new: true },
+        { returnDocument: "after" },
       );
 
       if (!post) {
@@ -80,7 +80,7 @@ const setReaction = async (req, res) => {
     const post = await Post.findOneAndUpdate(
       { _id: postId, expiresAt: { $gt: new Date() } },
       { $inc: { [`reactionCounts.${type}`]: 1 } },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     if (!post) {
@@ -120,7 +120,7 @@ const removeReaction = async (req, res) => {
     const post = await Post.findByIdAndUpdate(
       postId,
       { $inc: { [`reactionCounts.${reaction.type}`]: -1 } },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     return res.status(200).json({

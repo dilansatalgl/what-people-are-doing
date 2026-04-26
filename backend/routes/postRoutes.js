@@ -9,6 +9,7 @@ const authMiddleware = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
 const { getRandomFeed } = require("../controllers/feedController");
 const feedRateLimiter = require("../middleware/feedRateLimiter");
+const reactionRateLimiter = require("../middleware/reactionRateLimiter");
 
 router.post("/", authMiddleware, (req, res, next) => {
   upload.single("image")(req, res, function (error) {
@@ -37,8 +38,8 @@ router.post("/", authMiddleware, (req, res, next) => {
 router.delete("/:postId", authMiddleware, deletePost);
 router.post("/:postId/echo", authMiddleware, echoPost);
 router.delete("/:postId/echo", authMiddleware, unechoPost);
-router.put("/:postId/reaction", authMiddleware, setReaction);
-router.delete("/:postId/reaction", authMiddleware, removeReaction);
+router.put("/:postId/reaction", authMiddleware, reactionRateLimiter, setReaction);
+router.delete("/:postId/reaction", authMiddleware, reactionRateLimiter, removeReaction);
 router.get("/feed", authMiddleware, feedRateLimiter, getRandomFeed);
 
 module.exports = router;
