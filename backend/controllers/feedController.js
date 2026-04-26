@@ -101,18 +101,29 @@ const getNearbyFeed = async (req, res) => {
   try {
     const currentUserId = req.user.userId;
 
-    const longitude = Number(req.query.longitude);
-    const latitude = Number(req.query.latitude);
-    const radius = req.query.radius
-      ? Number(req.query.radius)
-      : DEFAULT_NEARBY_RADIUS_METERS;
+    const longitudeRaw = req.query.longitude;
+    const latitudeRaw = req.query.latitude;
+    const radiusRaw = req.query.radius;
 
-    if (req.query.longitude === undefined || req.query.latitude === undefined) {
+    if (
+      longitudeRaw === undefined ||
+      latitudeRaw === undefined ||
+      longitudeRaw === "" ||
+      latitudeRaw === ""
+    ) {
       return res.status(400).json({
         success: false,
         message: "Longitude and latitude are required.",
       });
     }
+
+    const longitude = Number(longitudeRaw);
+    const latitude = Number(latitudeRaw);
+
+    const radius =
+      radiusRaw !== undefined && radiusRaw !== ""
+        ? Number(radiusRaw)
+        : DEFAULT_NEARBY_RADIUS_METERS;
 
     if (Number.isNaN(longitude) || longitude < -180 || longitude > 180) {
       return res.status(400).json({
