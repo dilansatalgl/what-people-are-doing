@@ -235,6 +235,8 @@ export default function FeedScreen() {
 
       setErrorMessage(null);
 
+      const startMode = feedModeRef.current;
+
       try {
         const token = await AsyncStorage.getItem("token");
 
@@ -243,23 +245,41 @@ export default function FeedScreen() {
           return;
         }
 
-        if (feedModeRef.current === "nearby" && !coordsRef.current) {
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status !== "granted") {
+        if (startMode === "nearby") {
+          try {
+            if (!coordsRef.current) {
+              const { status } =
+                await Location.requestForegroundPermissionsAsync();
+              if (status !== "granted") {
+                setErrorMessage(
+                  "Location access is required for the Nearby feed. Enable it in Settings, then retry.",
+                );
+                return;
+              }
+              const pos = await Location.getCurrentPositionAsync({});
+              coordsRef.current = {
+                latitude: pos.coords.latitude,
+                longitude: pos.coords.longitude,
+              };
+            } else {
+              const last = await Location.getLastKnownPositionAsync();
+              if (last) {
+                coordsRef.current = {
+                  latitude: last.coords.latitude,
+                  longitude: last.coords.longitude,
+                };
+              }
+            }
+          } catch {
             setErrorMessage(
-              "Location access is required for the Nearby feed. Enable it in Settings, then retry.",
+              "Could not get your location. Make sure location services are enabled, then retry.",
             );
             return;
           }
-          const pos = await Location.getCurrentPositionAsync({});
-          coordsRef.current = {
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-          };
         }
 
         const url =
-          feedModeRef.current === "nearby" && coordsRef.current
+          startMode === "nearby" && coordsRef.current
             ? `${API_BASE_URL}/posts/feed/nearby?longitude=${coordsRef.current.longitude}&latitude=${coordsRef.current.latitude}`
             : `${API_BASE_URL}/posts/feed`;
 
@@ -278,6 +298,10 @@ export default function FeedScreen() {
 
         if (!response.ok) {
           setErrorMessage(data?.message || "Could not load the feed.");
+          return;
+        }
+
+        if (feedModeRef.current !== startMode) {
           return;
         }
 
@@ -330,6 +354,10 @@ export default function FeedScreen() {
 
         if (showRefreshing) {
           setRefreshing(false);
+        }
+
+        if (feedModeRef.current !== startMode) {
+          void loadFeed({ showLoading: true });
         }
       }
     },
