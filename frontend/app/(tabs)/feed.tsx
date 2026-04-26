@@ -16,9 +16,14 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, usePathname } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as Location from "expo-location";
 import { PostCard, type FeedPost } from "../../components/posts/PostCard";
 import { API_BASE_URL, FEED_POLL_INTERVAL_MS } from "../../constants/api";
 import { subscribeToEchoChanges } from "../../utils/echoStore";
+
+type FeedMode = "global" | "nearby";
+
+type Coordinates = { latitude: number; longitude: number };
 
 type FeedApiPost = {
   postId: string;
@@ -87,6 +92,9 @@ export default function FeedScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [feedMode, setFeedMode] = useState<FeedMode>("global");
+  const feedModeRef = useRef<FeedMode>("global");
+  const coordsRef = useRef<Coordinates | null>(null);
   const glowOneAnimation = useRef(new Animated.Value(0)).current;
   const glowTwoAnimation = useRef(new Animated.Value(0)).current;
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -235,7 +243,27 @@ export default function FeedScreen() {
           return;
         }
 
-        const response = await fetch(`${API_BASE_URL}/posts/feed`, {
+        if (feedModeRef.current === "nearby" && !coordsRef.current) {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== "granted") {
+            setErrorMessage(
+              "Location access is required for the Nearby feed. Enable it in Settings, then retry.",
+            );
+            return;
+          }
+          const pos = await Location.getCurrentPositionAsync({});
+          coordsRef.current = {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          };
+        }
+
+        const url =
+          feedModeRef.current === "nearby" && coordsRef.current
+            ? `${API_BASE_URL}/posts/feed/nearby?longitude=${coordsRef.current.longitude}&latitude=${coordsRef.current.latitude}`
+            : `${API_BASE_URL}/posts/feed`;
+
+        const response = await fetch(url, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -314,6 +342,18 @@ export default function FeedScreen() {
       params: { postId: post.id, post: JSON.stringify(post) },
     });
   }, []);
+
+  const handleSelectMode = useCallback(
+    (next: FeedMode) => {
+      if (next === feedModeRef.current) {
+        return;
+      }
+      feedModeRef.current = next;
+      setFeedMode(next);
+      void loadFeed({ showLoading: true });
+    },
+    [loadFeed],
+  );
 
   const handleEchoStateChange = useCallback(
     (postId: string, hasEchoed: boolean, echoCount: number) => {
@@ -438,6 +478,45 @@ export default function FeedScreen() {
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
+      <View style={styles.feedHeader}>
+        <Text style={styles.feedTitle}>The Pulse</Text>
+        <View style={styles.modeToggle}>
+          <Pressable
+            style={[
+              styles.modeOption,
+              feedMode === "global" && styles.modeOptionActive,
+            ]}
+            onPress={() => handleSelectMode("global")}
+            disabled={loading}
+          >
+            <Text
+              style={[
+                styles.modeOptionText,
+                feedMode === "global" && styles.modeOptionTextActive,
+              ]}
+            >
+              Global
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.modeOption,
+              feedMode === "nearby" && styles.modeOptionActive,
+            ]}
+            onPress={() => handleSelectMode("nearby")}
+            disabled={loading}
+          >
+            <Text
+              style={[
+                styles.modeOptionText,
+                feedMode === "nearby" && styles.modeOptionTextActive,
+              ]}
+            >
+              Nearby
+            </Text>
+          </Pressable>
+        </View>
+      </View>
       {loading ? (
         <View style={styles.loadingState}>
           <ActivityIndicator size="large" color="#FFFFFF" />
@@ -523,7 +602,6 @@ export default function FeedScreen() {
             onScrollEndDrag={handleScrollEndDrag}
           >
             <Animated.View style={{ height: spacerHeight }} />
-            <Text style={styles.feedTitle}>The Pulse</Text>
 
             <View style={styles.masonryGrid}>
               <View style={styles.masonryColumn}>
@@ -588,12 +666,42 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
   },
+  feedHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
   feedTitle: {
     color: "#F5F5F5",
     fontSize: 28,
     fontWeight: "800",
     letterSpacing: -0.6,
-    marginBottom: 18,
+    marginBottom: 14,
+  },
+  modeToggle: {
+    flexDirection: "row",
+    alignSelf: "flex-start",
+    backgroundColor: "#111111",
+    borderWidth: 1,
+    borderColor: "#262626",
+    borderRadius: 999,
+    padding: 4,
+  },
+  modeOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  modeOptionActive: {
+    backgroundColor: "#FFFFFF",
+  },
+  modeOptionText: {
+    color: "#9B9B9B",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  modeOptionTextActive: {
+    color: "#000000",
   },
   emptyListContent: {
     flex: 1,
