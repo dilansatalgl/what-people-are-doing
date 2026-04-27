@@ -49,7 +49,6 @@ const postSchema = new mongoose.Schema(
       wow: { type: Number, default: 0 },
       sad: { type: Number, default: 0 },
       cry: { type: Number, default: 0 },
-      like: { type: Number, default: 0 },
     },
     expiresAt: {
       type: Date,

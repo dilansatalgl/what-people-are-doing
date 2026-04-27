@@ -10,10 +10,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { ReactionPicker } from "./ReactionPicker";
 import {
-  REACTION_EMOJI,
   emptyReactionCounts,
-  topReaction,
-  totalReactionCount,
   type ReactionCounts,
   type ReactionType,
 } from "../../utils/reactionTypes";
@@ -80,9 +77,6 @@ export function PostCard({
   const [isPressed, setIsPressed] = useState(false);
   const [echoCount, setEchoCount] = useState(post.echoCount);
   const [hasEchoed, setHasEchoed] = useState(post.hasEchoed);
-  const [reactionCounts, setReactionCounts] = useState<ReactionCounts>(
-    post.reactionCounts ?? emptyReactionCounts(),
-  );
   const [userReaction, setUserReaction] = useState<ReactionType | null>(
     post.userReaction ?? null,
   );
@@ -108,7 +102,6 @@ export function PostCard({
     if (!reactionInFlight.current && !hasPendingReaction.current) {
       const nextCounts = post.reactionCounts ?? emptyReactionCounts();
       const nextReaction = post.userReaction ?? null;
-      setReactionCounts(nextCounts);
       setUserReaction(nextReaction);
       latestCountsRef.current = nextCounts;
       latestReactionRef.current = nextReaction;
@@ -214,7 +207,6 @@ export function PostCard({
     latestReactionRef.current = target;
     latestCountsRef.current = optimisticCounts;
     setUserReaction(target);
-    setReactionCounts(optimisticCounts);
     onReactionStateChange?.(post.id, target, optimisticCounts);
 
     if (reactionInFlight.current) {
@@ -237,7 +229,6 @@ export function PostCard({
           latestReactionRef.current = result.userReaction;
           latestCountsRef.current = result.reactionCounts;
           setUserReaction(result.userReaction);
-          setReactionCounts(result.reactionCounts);
           onReactionStateChange?.(
             post.id,
             result.userReaction,
@@ -249,7 +240,6 @@ export function PostCard({
         latestReactionRef.current = rollbackReaction;
         latestCountsRef.current = rollbackCounts;
         setUserReaction(rollbackReaction);
-        setReactionCounts(rollbackCounts);
         onReactionStateChange?.(post.id, rollbackReaction, rollbackCounts);
         hasPendingReaction.current = false;
         break;
@@ -265,14 +255,6 @@ export function PostCard({
     if (!onReactionChange) return;
     setPickerVisible(true);
   };
-
-  const total = totalReactionCount(reactionCounts);
-  const top = topReaction(reactionCounts);
-  const summaryEmoji = userReaction
-    ? REACTION_EMOJI[userReaction]
-    : top
-      ? REACTION_EMOJI[top.type]
-      : null;
 
   return (
     <>
@@ -316,49 +298,6 @@ export function PostCard({
                   </View>
                 ) : (
                   <View style={styles.locationRow} />
-                )}
-
-                {summaryEmoji ? (
-                  <Pressable
-                    style={[
-                      styles.reactionSummary,
-                      userReaction && styles.reactionSummaryActive,
-                    ]}
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      setPickerVisible(true);
-                    }}
-                    hitSlop={8}
-                  >
-                    <Text style={styles.reactionSummaryEmoji}>
-                      {summaryEmoji}
-                    </Text>
-                    {total > 0 ? (
-                      <Text
-                        style={[
-                          styles.reactionSummaryCount,
-                          userReaction && styles.reactionSummaryCountActive,
-                        ]}
-                      >
-                        {total}
-                      </Text>
-                    ) : null}
-                  </Pressable>
-                ) : (
-                  <Pressable
-                    style={styles.reactionAddButton}
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      setPickerVisible(true);
-                    }}
-                    hitSlop={8}
-                  >
-                    <Ionicons
-                      name="happy-outline"
-                      size={15}
-                      color="#8F8F8F"
-                    />
-                  </Pressable>
                 )}
 
                 <Pressable

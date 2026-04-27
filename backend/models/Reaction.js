@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const REACTION_TYPES = ["love", "laugh", "wow", "sad", "cry", "like"];
+const REACTION_TYPES = ["love", "laugh", "wow", "sad", "cry"];
 
 const reactionSchema = new mongoose.Schema(
   {

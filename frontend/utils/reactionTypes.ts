@@ -4,7 +4,6 @@ export const REACTION_TYPES = [
   "wow",
   "sad",
   "cry",
-  "like",
 ] as const;
 
 export type ReactionType = (typeof REACTION_TYPES)[number];
@@ -15,7 +14,6 @@ export const REACTION_EMOJI: Record<ReactionType, string> = {
   wow: "😮",
   sad: "😢",
   cry: "😭",
-  like: "👍",
 };
 
 export type ReactionCounts = Record<ReactionType, number>;
