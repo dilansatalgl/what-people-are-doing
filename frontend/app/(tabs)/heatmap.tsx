@@ -237,7 +237,12 @@ export default function HeatmapScreen() {
         ) : null}
       </MapView>
 
-      <View pointerEvents="box-none" style={styles.controls}>
+      <View pointerEvents="box-none" style={styles.topBar}>
+        <View style={styles.titlePill}>
+          <Ionicons name="flame-outline" size={24} color="#FFFFFF" />
+          <Text style={styles.titleText}>Activity Heatmap</Text>
+        </View>
+
         <Pressable
           accessibilityLabel="Refresh heatmap"
           accessibilityRole="button"
@@ -249,9 +254,9 @@ export default function HeatmapScreen() {
           disabled={loading || refreshing}
         >
           {loading || refreshing ? (
-            <ActivityIndicator size="small" color="#111111" />
+            <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
-            <Ionicons name="refresh" size={20} color="#111111" />
+            <Ionicons name="refresh" size={28} color="#FFFFFF" />
           )}
         </Pressable>
       </View>
@@ -282,24 +287,49 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  controls: {
+  topBar: {
     position: "absolute",
-    top: 14,
-    right: 14,
+    top: 24,
+    left: 28,
+    right: 28,
     zIndex: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  titlePill: {
+    minHeight: 58,
+    maxWidth: "76%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 29,
+    backgroundColor: "#242424",
+    paddingHorizontal: 24,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 7,
+  },
+  titleText: {
+    flexShrink: 1,
+    color: "#FFFFFF",
+    fontSize: 24,
+    fontWeight: "800",
   },
   refreshButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#FFFFFF",
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    backgroundColor: "#242424",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 7,
   },
   refreshButtonDisabled: {
     opacity: 0.72,
