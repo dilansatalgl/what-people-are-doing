@@ -109,6 +109,12 @@ const normalizeHeatmapPoints = (points: HeatmapApiPoint[] | undefined) => {
   );
 };
 
+const isAbortError = (error: unknown) =>
+  typeof error === "object" &&
+  error !== null &&
+  "name" in error &&
+  (error as { name?: string }).name === "AbortError";
+
 export default function HeatmapScreen() {
   const pathname = usePathname();
   const [points, setPoints] = useState<HeatmapApiPoint[]>([]);
@@ -118,12 +124,15 @@ export default function HeatmapScreen() {
   const hasLoadedHeatmap = useRef(false);
   const requestInFlight = useRef(false);
   const isMounted = useRef(true);
+  const activeRequestController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     isMounted.current = true;
 
     return () => {
       isMounted.current = false;
+      activeRequestController.current?.abort();
+      activeRequestController.current = null;
     };
   }, []);
 
@@ -135,11 +144,17 @@ export default function HeatmapScreen() {
       showLoading?: boolean;
       showRefreshing?: boolean;
     } = {}) => {
+      if (!isMounted.current) {
+        return;
+      }
+
       if (requestInFlight.current) {
         return;
       }
 
       requestInFlight.current = true;
+      const abortController = new AbortController();
+      activeRequestController.current = abortController;
 
       if (showLoading) {
         setLoading(true);
@@ -154,6 +169,10 @@ export default function HeatmapScreen() {
       try {
         const token = await getAuthToken();
 
+        if (!isMounted.current || abortController.signal.aborted) {
+          return;
+        }
+
         if (!token) {
           router.replace("/login");
           return;
@@ -163,7 +182,12 @@ export default function HeatmapScreen() {
           headers: {
             Authorization: `Bearer ${token}`,
           },
+          signal: abortController.signal,
         });
+
+        if (!isMounted.current || abortController.signal.aborted) {
+          return;
+        }
 
         if (response.status === 401) {
           router.replace("/login");
@@ -171,6 +195,10 @@ export default function HeatmapScreen() {
         }
 
         const data = (await response.json()) as HeatmapResponse;
+
+        if (!isMounted.current || abortController.signal.aborted) {
+          return;
+        }
 
         if (!response.ok || data.success === false) {
           setErrorMessage(data.message || "Could not load heatmap data.");
@@ -184,12 +212,20 @@ export default function HeatmapScreen() {
 
         setPoints(normalizeHeatmapPoints(data.data));
       } catch (error) {
+        if (isAbortError(error) || !isMounted.current) {
+          return;
+        }
+
         console.error("Heatmap load error:", error);
         setErrorMessage("Could not connect to the server.");
       } finally {
+        if (activeRequestController.current === abortController) {
+          activeRequestController.current = null;
+        }
+
         requestInFlight.current = false;
 
-        if (isMounted.current) {
+        if (isMounted.current && !abortController.signal.aborted) {
           setLoading(false);
           setRefreshing(false);
         }
