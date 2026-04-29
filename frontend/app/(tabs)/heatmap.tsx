@@ -239,8 +239,15 @@ export default function HeatmapScreen() {
 
       <View pointerEvents="box-none" style={styles.topBar}>
         <View style={styles.titlePill}>
-          <Ionicons name="flame-outline" size={24} color="#FFFFFF" />
-          <Text style={styles.titleText}>Activity Heatmap</Text>
+          <Ionicons name="flame-outline" size={18} color="#FFFFFF" />
+          <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.84}
+            numberOfLines={1}
+            style={styles.titleText}
+          >
+            Activity Heatmap
+          </Text>
         </View>
 
         <Pressable
@@ -256,7 +263,7 @@ export default function HeatmapScreen() {
           {loading || refreshing ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
-            <Ionicons name="refresh" size={28} color="#FFFFFF" />
+            <Ionicons name="refresh" size={21} color="#FFFFFF" />
           )}
         </Pressable>
       </View>
@@ -289,7 +296,7 @@ const styles = StyleSheet.create({
   },
   topBar: {
     position: "absolute",
-    top: 24,
+    top: 72,
     left: 28,
     right: 28,
     zIndex: 2,
@@ -298,14 +305,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   titlePill: {
-    minHeight: 58,
-    maxWidth: "76%",
+    minHeight: 44,
+    maxWidth: "74%",
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    borderRadius: 29,
+    gap: 8,
+    borderRadius: 22,
     backgroundColor: "#242424",
-    paddingHorizontal: 24,
+    paddingHorizontal: 15,
     shadowColor: "#000000",
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.3,
@@ -315,13 +322,13 @@ const styles = StyleSheet.create({
   titleText: {
     flexShrink: 1,
     color: "#FFFFFF",
-    fontSize: 24,
+    fontSize: 17,
     fontWeight: "800",
   },
   refreshButton: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: "#242424",
     alignItems: "center",
     justifyContent: "center",
