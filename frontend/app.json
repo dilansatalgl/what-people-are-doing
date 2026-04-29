@@ -9,9 +9,14 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.whatpeoplearedoing.app",
+      "config": {
+        "googleMapsApiKey": "AIzaSyD0JllF-ftsOp_ju7EK1R2gG_0qpv8OCRI"
+      }
     },
     "android": {
+      "package": "com.whatpeoplearedoing.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -19,7 +24,12 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyD0JllF-ftsOp_ju7EK1R2gG_0qpv8OCRI"
+        }
+      }
     },
     "web": {
       "output": "static",
