@@ -115,6 +115,9 @@ const isAbortError = (error: unknown) =>
   "name" in error &&
   (error as { name?: string }).name === "AbortError";
 
+const canUpdateHeatmapState = (abortController: AbortController) =>
+  !abortController.signal.aborted;
+
 export default function HeatmapScreen() {
   const pathname = usePathname();
   const [points, setPoints] = useState<HeatmapApiPoint[]>([]);
@@ -169,7 +172,7 @@ export default function HeatmapScreen() {
       try {
         const token = await getAuthToken();
 
-        if (!isMounted.current || abortController.signal.aborted) {
+        if (!isMounted.current || !canUpdateHeatmapState(abortController)) {
           return;
         }
 
@@ -185,7 +188,7 @@ export default function HeatmapScreen() {
           signal: abortController.signal,
         });
 
-        if (!isMounted.current || abortController.signal.aborted) {
+        if (!isMounted.current || !canUpdateHeatmapState(abortController)) {
           return;
         }
 
@@ -196,28 +199,36 @@ export default function HeatmapScreen() {
 
         const data = (await response.json()) as HeatmapResponse;
 
-        if (!isMounted.current || abortController.signal.aborted) {
+        if (!isMounted.current || !canUpdateHeatmapState(abortController)) {
           return;
         }
 
         if (!response.ok || data.success === false) {
-          setErrorMessage(data.message || "Could not load heatmap data.");
+          if (isMounted.current && canUpdateHeatmapState(abortController)) {
+            setErrorMessage(data.message || "Could not load heatmap data.");
+          }
           return;
         }
 
         if (!Array.isArray(data.data)) {
-          setErrorMessage("Heatmap data was not in the expected format.");
+          if (isMounted.current && canUpdateHeatmapState(abortController)) {
+            setErrorMessage("Heatmap data was not in the expected format.");
+          }
           return;
         }
 
-        setPoints(normalizeHeatmapPoints(data.data));
+        if (isMounted.current && canUpdateHeatmapState(abortController)) {
+          setPoints(normalizeHeatmapPoints(data.data));
+        }
       } catch (error) {
         if (isAbortError(error) || !isMounted.current) {
           return;
         }
 
         console.error("Heatmap load error:", error);
-        setErrorMessage("Could not connect to the server.");
+        if (canUpdateHeatmapState(abortController)) {
+          setErrorMessage("Could not connect to the server.");
+        }
       } finally {
         if (activeRequestController.current === abortController) {
           activeRequestController.current = null;
@@ -225,7 +236,7 @@ export default function HeatmapScreen() {
 
         requestInFlight.current = false;
 
-        if (isMounted.current && !abortController.signal.aborted) {
+        if (isMounted.current && canUpdateHeatmapState(abortController)) {
           setLoading(false);
           setRefreshing(false);
         }
@@ -249,6 +260,7 @@ export default function HeatmapScreen() {
 
     return () => {
       clearInterval(timer);
+      activeRequestController.current?.abort();
     };
   }, [loadHeatmap, pathname]);
 
