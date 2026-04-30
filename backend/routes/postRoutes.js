@@ -4,11 +4,13 @@ const multer = require("multer");
 
 const { createPost, deletePost } = require("../controllers/postController");
 const { echoPost, unechoPost } = require("../controllers/echoController");
+const { setReaction, removeReaction } = require("../controllers/reactionController");
 const authMiddleware = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
 const { getRandomFeed, getNearbyFeed } = require("../controllers/feedController");
 const feedRateLimiter = require("../middleware/feedRateLimiter");
 const echoRateLimiter = require("../middleware/echoRateLimiter");
+const reactionRateLimiter = require("../middleware/reactionRateLimiter");
 
 router.post("/", authMiddleware, (req, res, next) => {
   upload.single("image")(req, res, function (error) {
@@ -37,6 +39,8 @@ router.post("/", authMiddleware, (req, res, next) => {
 router.delete("/:postId", authMiddleware, deletePost);
 router.post("/:postId/echo", authMiddleware, echoRateLimiter, echoPost);
 router.delete("/:postId/echo", authMiddleware, echoRateLimiter, unechoPost);
+router.put("/:postId/reaction", authMiddleware, reactionRateLimiter, setReaction);
+router.delete("/:postId/reaction", authMiddleware, reactionRateLimiter, removeReaction);
 router.get("/feed", authMiddleware, feedRateLimiter, getRandomFeed);
 router.get("/feed/nearby", authMiddleware, feedRateLimiter, getNearbyFeed);
 

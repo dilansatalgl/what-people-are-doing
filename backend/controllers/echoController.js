@@ -16,7 +16,7 @@ const echoPost = async (req, res) => {
     const post = await Post.findOneAndUpdate(
       { _id: postId, expiresAt: { $gt: new Date() } },
       { $inc: { echoCount: 1 } },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     if (!post) {
@@ -52,7 +52,7 @@ const unechoPost = async (req, res) => {
     const post = await Post.findByIdAndUpdate(
       postId,
       { $inc: { echoCount: -1 } },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     return res.status(200).json({
