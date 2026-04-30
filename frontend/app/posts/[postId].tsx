@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useRef, useState } from "react";
 import {
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -151,7 +152,18 @@ export default function PostDetailScreen() {
         throw new Error("Unauthorized");
       }
 
-      const data = (await response.json()) as { echoCount?: number };
+      const data = (await response.json()) as {
+        echoCount?: number;
+        message?: string;
+      };
+
+      if (response.status === 429) {
+        Alert.alert(
+          "Slow down",
+          data.message ?? "Too many echo actions. Please try again shortly.",
+        );
+        throw new Error("Echo rate limited");
+      }
 
       if (!response.ok) {
         throw new Error("Echo request failed");
