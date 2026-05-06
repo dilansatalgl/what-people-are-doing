@@ -53,11 +53,16 @@ test("getRandomFeed returns formatted feed posts", async () => {
     },
   ];
 
-  Post.aggregate = async () => mockPosts;
+  let aggregatePipeline;
+  Post.aggregate = async (pipeline) => {
+    aggregatePipeline = pipeline;
+    return mockPosts;
+  };
 
   await getRandomFeed(req, res);
 
   assert.equal(statusCode, 200);
+  assert.equal(aggregatePipeline[1].$sample.size, 120);
   assert.deepEqual(jsonBody, {
     success: true,
     count: 1,
@@ -76,6 +81,14 @@ test("getRandomFeed returns formatted feed posts", async () => {
         username: "beren",
         echoCount: 0,
         hasEchoed: false,
+        reactionCounts: {
+          cry: 0,
+          laugh: 0,
+          love: 0,
+          sad: 0,
+          wow: 0,
+        },
+        userReaction: null,
       },
     ],
   });

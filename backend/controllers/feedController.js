@@ -14,7 +14,7 @@ const buildReactionCounts = (stored) => {
 
 const DEFAULT_NEARBY_RADIUS_METERS = 2000;
 const MAX_NEARBY_RADIUS_METERS = 10000;
-const FEED_LIMIT = 20;
+const FEED_SNAPSHOT_LIMIT = 120;
 
 const getRandomFeed = async (req, res) => {
   try {
@@ -28,7 +28,7 @@ const getRandomFeed = async (req, res) => {
         },
       },
       {
-        $sample: { size: FEED_LIMIT },
+        $sample: { size: FEED_SNAPSHOT_LIMIT },
       },
       {
         $lookup: {
@@ -208,7 +208,7 @@ const getNearbyFeed = async (req, res) => {
         },
       },
       {
-        $limit: FEED_LIMIT,
+        $limit: FEED_SNAPSHOT_LIMIT,
       },
       {
         $lookup: {

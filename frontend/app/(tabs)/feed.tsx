@@ -55,6 +55,9 @@ type FeedResponse = {
 const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
 const PULL_THRESHOLD = 70;
 const SPINNER_AREA_HEIGHT = 56;
+const FEED_PAGE_SIZE = 20;
+const LOAD_MORE_THRESHOLD = 360;
+const LOAD_MORE_INDICATOR_MS = 1000;
 const ESTIMATED_CAPTION_CHARS_PER_LINE = 18;
 const ESTIMATED_CARD_BASE_HEIGHT = 280;
 const ESTIMATED_TEXT_LINE_HEIGHT = 22;
@@ -101,6 +104,8 @@ export default function FeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [feedMode, setFeedMode] = useState<FeedMode>("global");
+  const [visibleFeedCount, setVisibleFeedCount] = useState(FEED_PAGE_SIZE);
+  const [loadingMore, setLoadingMore] = useState(false);
   const feedModeRef = useRef<FeedMode>("global");
   const coordsRef = useRef<Coordinates | null>(null);
   const glowOneAnimation = useRef(new Animated.Value(0)).current;
@@ -112,7 +117,10 @@ export default function FeedScreen() {
   const isFeedRouteActive = useRef(pathname === "/feed");
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const requestInFlight = useRef(false);
-  const { leftColumn, rightColumn } = buildMasonryColumns(feedPosts);
+  const loadMoreInFlight = useRef(false);
+  const loadMoreTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const visibleFeedPosts = feedPosts.slice(0, visibleFeedCount);
+  const { leftColumn, rightColumn } = buildMasonryColumns(visibleFeedPosts);
 
   useEffect(() => {
     const glowOneLoop = Animated.loop(
@@ -153,6 +161,9 @@ export default function FeedScreen() {
       glowTwoLoop.stop();
       glowOneAnimation.stopAnimation();
       glowTwoAnimation.stopAnimation();
+      if (loadMoreTimer.current !== null) {
+        clearTimeout(loadMoreTimer.current);
+      }
     };
   }, [glowOneAnimation, glowTwoAnimation]);
 
@@ -313,30 +324,32 @@ export default function FeedScreen() {
           return;
         }
 
-        setFeedPosts(
-          data.posts.map((post) => ({
-            id: post.postId,
-            text: post.text ?? "",
-            imageUrl: `${API_ORIGIN}${post.image}`,
-            createdAt: post.createdAt,
-            locationName: post.locationName ?? null,
-            coordinates:
-              post.coordinates?.longitude != null &&
-              post.coordinates?.latitude != null
-                ? {
-                    longitude: post.coordinates.longitude,
-                    latitude: post.coordinates.latitude,
-                  }
-                : null,
-            echoCount: post.echoCount ?? 0,
-            hasEchoed: post.hasEchoed ?? false,
-            reactionCounts: {
-              ...emptyReactionCounts(),
-              ...(post.reactionCounts ?? {}),
-            },
-            userReaction: post.userReaction ?? null,
-          })),
-        );
+        const nextPosts = data.posts.map((post) => ({
+          id: post.postId,
+          text: post.text ?? "",
+          imageUrl: `${API_ORIGIN}${post.image}`,
+          createdAt: post.createdAt,
+          locationName: post.locationName ?? null,
+          coordinates:
+            post.coordinates?.longitude != null &&
+            post.coordinates?.latitude != null
+              ? {
+                  longitude: post.coordinates.longitude,
+                  latitude: post.coordinates.latitude,
+                }
+              : null,
+          echoCount: post.echoCount ?? 0,
+          hasEchoed: post.hasEchoed ?? false,
+          reactionCounts: {
+            ...emptyReactionCounts(),
+            ...(post.reactionCounts ?? {}),
+          },
+          userReaction: post.userReaction ?? null,
+        }));
+
+        setFeedPosts(nextPosts);
+        setVisibleFeedCount(Math.min(FEED_PAGE_SIZE, nextPosts.length));
+        setLoadingMore(false);
 
         if (scrollToTopOnSuccess && isFeedRouteActive.current) {
           scrollFeedToTop();
@@ -544,6 +557,10 @@ export default function FeedScreen() {
     }).start();
   }, [refreshing, spacerHeight]);
 
+  useEffect(() => {
+    loadMoreInFlight.current = false;
+  }, [visibleFeedCount]);
+
   const handleScrollEndDrag = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (
@@ -554,6 +571,41 @@ export default function FeedScreen() {
       }
     },
     [loadFeed],
+  );
+
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } =
+        event.nativeEvent;
+      const distanceFromBottom =
+        contentSize.height - (contentOffset.y + layoutMeasurement.height);
+
+      if (
+        distanceFromBottom > LOAD_MORE_THRESHOLD ||
+        loadMoreInFlight.current
+      ) {
+        return;
+      }
+
+      setVisibleFeedCount((prev) => {
+        if (prev >= feedPosts.length) {
+          return prev;
+        }
+
+        loadMoreInFlight.current = true;
+        setLoadingMore(true);
+        if (loadMoreTimer.current !== null) {
+          clearTimeout(loadMoreTimer.current);
+        }
+        loadMoreTimer.current = setTimeout(() => {
+          setLoadingMore(false);
+          loadMoreTimer.current = null;
+        }, LOAD_MORE_INDICATOR_MS);
+
+        return Math.min(prev + FEED_PAGE_SIZE, feedPosts.length);
+      });
+    },
+    [feedPosts.length],
   );
 
   const pullOpacity = scrollY.interpolate({
@@ -707,7 +759,7 @@ export default function FeedScreen() {
             scrollEventThrottle={16}
             onScroll={Animated.event(
               [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-              { useNativeDriver: true },
+              { listener: handleScroll, useNativeDriver: true },
             )}
             onScrollEndDrag={handleScrollEndDrag}
           >
@@ -744,6 +796,11 @@ export default function FeedScreen() {
                 ))}
               </View>
             </View>
+            {loadingMore ? (
+              <View style={styles.loadMoreIndicator}>
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              </View>
+            ) : null}
           </Animated.ScrollView>
         </View>
       )}
@@ -831,6 +888,11 @@ const styles = StyleSheet.create({
   },
   masonryItem: {
     marginBottom: 16,
+  },
+  loadMoreIndicator: {
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyState: {
     position: "relative",
