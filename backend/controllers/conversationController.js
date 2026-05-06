@@ -430,6 +430,67 @@ const listConversations = async (req, res) => {
   }
 };
 
+// GET /api/dm/threads/with/:userId  — most recent thread between viewer and :userId
+const getThreadWithUser = async (req, res) => {
+  try {
+    const { userId: otherUserId } = req.params;
+    const viewerId = req.user.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(otherUserId)) {
+      return res.status(400).json({ message: "Invalid user ID." });
+    }
+
+    if (otherUserId === viewerId) {
+      return res
+        .status(400)
+        .json({ message: "Cannot fetch a DM with yourself." });
+    }
+
+    const viewerObjectId = new mongoose.Types.ObjectId(viewerId);
+    const otherObjectId = new mongoose.Types.ObjectId(otherUserId);
+
+    const conversation = await Conversation.findOne({
+      $or: [
+        { creator: viewerObjectId, initiator: otherObjectId },
+        { creator: otherObjectId, initiator: viewerObjectId },
+      ],
+    })
+      .sort({ lastMessageAt: -1, createdAt: -1 })
+      .populate("creator", "username")
+      .populate("initiator", "username");
+
+    if (!conversation) {
+      return res.status(404).json({ message: "Thread not found." });
+    }
+
+    const role = getViewerRole(conversation, viewerId);
+    const otherPartyName = resolveOtherPartyDisplay(conversation, role);
+
+    return res.status(200).json({
+      success: true,
+      conversation: {
+        id: conversation._id,
+        postId: conversation.post,
+        viewerRole: role,
+        otherPartyName,
+        creatorRevealed: conversation.creatorRevealed,
+        lastMessageAt: conversation.lastMessageAt,
+        lastMessagePreview: conversation.lastMessagePreview || "",
+        unreadCount:
+          role === "creator"
+            ? conversation.unreadByCreator
+            : conversation.unreadByInitiator,
+      },
+    });
+  } catch (error) {
+    console.error("Get thread with user error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch thread.",
+    });
+  }
+};
+
 module.exports = {
   getUnreadCount,
   markConversationRead,
@@ -437,4 +498,5 @@ module.exports = {
   createConversation,
   sendMessage,
   listConversations,
+  getThreadWithUser,
 };

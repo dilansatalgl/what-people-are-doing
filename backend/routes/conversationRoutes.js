@@ -9,13 +9,15 @@ const {
   createConversation,
   sendMessage,
   listConversations,
+  getThreadWithUser,
 } = require("../controllers/conversationController");
 
 router.get("/unread-count", authMiddleware, getUnreadCount);
-router.get("/", authMiddleware, listConversations);
-router.post("/", authMiddleware, createConversation);
-router.get("/:conversationId", authMiddleware, getConversation);
-router.post("/:conversationId/read", authMiddleware, markConversationRead);
-router.post("/:conversationId/messages", authMiddleware, sendMessage);
+router.get("/threads", authMiddleware, listConversations);
+router.post("/threads", authMiddleware, createConversation);
+router.get("/threads/with/:userId", authMiddleware, getThreadWithUser);
+router.get("/threads/:conversationId", authMiddleware, getConversation);
+router.post("/threads/:conversationId/read", authMiddleware, markConversationRead);
+router.post("/threads/:conversationId/messages", authMiddleware, sendMessage);
 
 module.exports = router;

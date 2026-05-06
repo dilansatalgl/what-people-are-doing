@@ -37,8 +37,8 @@ app.use("/api/posts", postRoutes);
 // heatmap route
 app.use("/api/heatmap", heatmapRoutes);
 
-// conversation routes
-app.use("/api/conversations", conversationRoutes);
+// dm routes
+app.use("/api/dm", conversationRoutes);
 
 // test route
 app.get("/", (req, res) => {
