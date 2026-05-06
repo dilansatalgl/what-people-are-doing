@@ -9,6 +9,7 @@ const { startPostCleanupJob } = require("./services/postCleanupService");
 const userRoutes = require("./routes/userRoutes");
 const postRoutes = require("./routes/postRoutes");
 const heatmapRoutes = require("./routes/heatmapRoutes");
+const dmRoutes = require("./routes/dmRoutes");
 
 const app = express();
 
@@ -35,6 +36,9 @@ app.use("/api/posts", postRoutes);
 
 // heatmap route
 app.use("/api/heatmap", heatmapRoutes);
+
+// dm routes
+app.use("/api/dm", dmRoutes);
 
 // test route
 app.get("/", (req, res) => {
