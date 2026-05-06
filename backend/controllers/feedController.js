@@ -15,21 +15,53 @@ const buildReactionCounts = (stored) => {
 const DEFAULT_NEARBY_RADIUS_METERS = 2000;
 const MAX_NEARBY_RADIUS_METERS = 10000;
 const FEED_SNAPSHOT_LIMIT = 120;
+const MIN_FEED_RANDOM_VALUE = 1e-12;
+
+const buildEchoWeightedFeedStages = () => [
+  {
+    $addFields: {
+      feedWeight: {
+        $add: [{ $max: [{ $ifNull: ["$echoCount", 0] }, 0] }, 1],
+      },
+      feedRandom: {
+        $max: [{ $rand: {} }, MIN_FEED_RANDOM_VALUE],
+      },
+    },
+  },
+  {
+    $addFields: {
+      feedRank: {
+        $divide: [
+          { $multiply: [-1, { $ln: "$feedRandom" }] },
+          "$feedWeight",
+        ],
+      },
+    },
+  },
+  {
+    $sort: {
+      feedRank: 1,
+      createdAt: -1,
+    },
+  },
+  {
+    $limit: FEED_SNAPSHOT_LIMIT,
+  },
+];
 
 const getRandomFeed = async (req, res) => {
   try {
     const currentUserId = req.user.userId;
+    const currentUserObjectId = new mongoose.Types.ObjectId(currentUserId);
 
     const posts = await Post.aggregate([
       {
         $match: {
           expiresAt: { $gt: new Date() },
-          user: { $ne: new mongoose.Types.ObjectId(currentUserId) },
+          user: { $ne: currentUserObjectId },
         },
       },
-      {
-        $sample: { size: FEED_SNAPSHOT_LIMIT },
-      },
+      ...buildEchoWeightedFeedStages(),
       {
         $lookup: {
           from: "users",
@@ -51,7 +83,7 @@ const getRandomFeed = async (req, res) => {
                 $expr: {
                   $and: [
                     { $eq: ["$post", "$$postId"] },
-                    { $eq: ["$user", new mongoose.Types.ObjectId(currentUserId)] },
+                    { $eq: ["$user", currentUserObjectId] },
                   ],
                 },
               },
@@ -71,7 +103,7 @@ const getRandomFeed = async (req, res) => {
                 $expr: {
                   $and: [
                     { $eq: ["$post", "$$postId"] },
-                    { $eq: ["$user", new mongoose.Types.ObjectId(currentUserId)] },
+                    { $eq: ["$user", currentUserObjectId] },
                   ],
                 },
               },
