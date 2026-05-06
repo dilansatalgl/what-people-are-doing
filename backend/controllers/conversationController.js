@@ -10,9 +10,14 @@ const DEFAULT_THREAD_PAGE_SIZE = 30;
 const MAX_THREAD_PAGE_SIZE = 100;
 const MESSAGE_PREVIEW_LENGTH = 200;
 
+const idOf = (refOrDoc) => {
+  if (!refOrDoc) return null;
+  return (refOrDoc._id ?? refOrDoc).toString();
+};
+
 const getViewerRole = (conversation, userId) => {
-  if (conversation.creator.toString() === userId) return "creator";
-  if (conversation.initiator.toString() === userId) return "initiator";
+  if (idOf(conversation.creator) === userId) return "creator";
+  if (idOf(conversation.initiator) === userId) return "initiator";
   return null;
 };
 
