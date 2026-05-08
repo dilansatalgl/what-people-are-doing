@@ -62,7 +62,35 @@ test("getRandomFeed returns formatted feed posts", async () => {
   await getRandomFeed(req, res);
 
   assert.equal(statusCode, 200);
-  assert.equal(aggregatePipeline[1].$sample.size, 120);
+  assert.deepEqual(aggregatePipeline[1], {
+    $addFields: {
+      feedWeight: {
+        $add: [{ $max: [{ $ifNull: ["$echoCount", 0] }, 0] }, 1],
+      },
+      feedRandom: {
+        $max: [{ $rand: {} }, 1e-12],
+      },
+    },
+  });
+  assert.deepEqual(aggregatePipeline[2], {
+    $addFields: {
+      feedRank: {
+        $divide: [
+          { $multiply: [-1, { $ln: "$feedRandom" }] },
+          "$feedWeight",
+        ],
+      },
+    },
+  });
+  assert.deepEqual(aggregatePipeline[3], {
+    $sort: {
+      feedRank: 1,
+      createdAt: -1,
+    },
+  });
+  assert.deepEqual(aggregatePipeline[4], {
+    $limit: 120,
+  });
   assert.deepEqual(jsonBody, {
     success: true,
     count: 1,
