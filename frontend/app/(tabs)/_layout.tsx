@@ -1,11 +1,49 @@
-import React from "react";
-import { StyleSheet, TouchableOpacity } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { AppState, StyleSheet, TouchableOpacity } from "react-native";
 import { Tabs, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { fetchDmUnreadCount, DmApiError } from "../../utils/dmApi";
+import {
+  formatDmUnreadBadge,
+  getDmUnreadCountSnapshot,
+  setDmUnreadCount,
+  subscribeToDmUnreadCount,
+} from "../../utils/dmStore";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
 export default function TabsLayout() {
+  const [unreadCount, setUnreadCountState] = useState(
+    getDmUnreadCountSnapshot(),
+  );
+
+  const refreshUnreadCount = useCallback(async () => {
+    try {
+      const summary = await fetchDmUnreadCount();
+      setDmUnreadCount(summary.unreadCount);
+    } catch (error) {
+      if (error instanceof DmApiError && error.status === 401) {
+        router.replace("/login");
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    return subscribeToDmUnreadCount(setUnreadCountState);
+  }, []);
+
+  useEffect(() => {
+    void refreshUnreadCount();
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        void refreshUnreadCount();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [refreshUnreadCount]);
+
   return (
     <Tabs
       screenOptions={({ route }) => ({
@@ -27,6 +65,10 @@ export default function TabsLayout() {
             iconName = focused ? "add-circle" : "add-circle-outline";
           } else if (route.name === "heatmap") {
             iconName = focused ? "map" : "map-outline";
+          } else if (route.name === "dm") {
+            iconName = focused
+              ? "chatbubble-ellipses"
+              : "chatbubble-ellipses-outline";
           } else if (route.name === "account") {
             iconName = focused ? "person-circle" : "person-circle-outline";
           }
@@ -62,6 +104,14 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="dm"
+        options={{
+          title: "Messages",
+          tabBarBadge: formatDmUnreadBadge(unreadCount),
+          tabBarBadgeStyle: styles.tabBarBadge,
+        }}
+      />
+      <Tabs.Screen
         name="account"
         options={{
           title: "Account",
@@ -94,5 +144,14 @@ const styles = StyleSheet.create({
   },
   tabBarIcon: {
     marginTop: 0,
+  },
+  tabBarBadge: {
+    backgroundColor: "#FFFFFF",
+    color: "#000000",
+    fontSize: 10,
+    fontWeight: "800",
+    minWidth: 18,
+    height: 18,
+    lineHeight: 16,
   },
 });

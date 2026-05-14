@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Pressable,
@@ -16,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { FeedPost } from "../../components/posts/PostCard";
 import { ReactionPicker } from "../../components/posts/ReactionPicker";
 import { API_BASE_URL } from "../../constants/api";
+import { DmApiError, startDmThread } from "../../utils/dmApi";
 import { publishEchoChange } from "../../utils/echoStore";
 import { publishReactionChange } from "../../utils/reactionStore";
 import {
@@ -90,6 +92,7 @@ export default function PostDetailScreen() {
     post?.userReaction ?? null,
   );
   const [pickerVisible, setPickerVisible] = useState(false);
+  const [startingDm, setStartingDm] = useState(false);
   const echoInFlight = useRef(false);
   const reactionInFlight = useRef(false);
   const hasPendingReaction = useRef(false);
@@ -310,6 +313,33 @@ export default function PostDetailScreen() {
     reactionInFlight.current = false;
   };
 
+  const handleMessagePress = async () => {
+    if (startingDm) return;
+
+    setStartingDm(true);
+    try {
+      const thread = await startDmThread(post.id);
+      router.push({
+        pathname: "/dm/[threadId]" as any,
+        params: { threadId: thread.id },
+      });
+    } catch (error) {
+      if (error instanceof DmApiError && error.status === 401) {
+        router.replace("/login");
+        return;
+      }
+
+      Alert.alert(
+        "Could not open messages",
+        error instanceof DmApiError
+          ? error.message
+          : "Please try again in a moment.",
+      );
+    } finally {
+      setStartingDm(false);
+    }
+  };
+
   const totalReactions = totalReactionCount(reactionCounts);
   const top = topReaction(reactionCounts);
   const summaryEmoji = userReaction
@@ -358,33 +388,60 @@ export default function PostDetailScreen() {
             ) : null}
 
             <View style={styles.actionRow}>
-              <Pressable
-                style={[
-                  styles.reactionSummary,
-                  userReaction && styles.reactionSummaryActive,
-                ]}
-                onPress={() => setPickerVisible(true)}
-                onLongPress={() => setPickerVisible(true)}
-                hitSlop={8}
-              >
-                {summaryEmoji ? (
-                  <Text style={styles.reactionSummaryEmoji}>
-                    {summaryEmoji}
-                  </Text>
-                ) : (
-                  <Ionicons name="happy-outline" size={18} color="#8F8F8F" />
-                )}
-                <Text
+              <View style={styles.primaryActionGroup}>
+                <Pressable
                   style={[
-                    styles.reactionSummaryLabel,
-                    userReaction && styles.reactionSummaryLabelActive,
+                    styles.reactionSummary,
+                    userReaction && styles.reactionSummaryActive,
                   ]}
+                  onPress={() => setPickerVisible(true)}
+                  onLongPress={() => setPickerVisible(true)}
+                  hitSlop={8}
                 >
-                  {totalReactions > 0
-                    ? `${totalReactions} react${totalReactions === 1 ? "" : "s"}`
-                    : "React"}
-                </Text>
-              </Pressable>
+                  {summaryEmoji ? (
+                    <Text style={styles.reactionSummaryEmoji}>
+                      {summaryEmoji}
+                    </Text>
+                  ) : (
+                    <Ionicons name="happy-outline" size={18} color="#8F8F8F" />
+                  )}
+                  <Text
+                    style={[
+                      styles.reactionSummaryLabel,
+                      userReaction && styles.reactionSummaryLabelActive,
+                    ]}
+                  >
+                    {totalReactions > 0
+                      ? `${totalReactions} react${totalReactions === 1 ? "" : "s"}`
+                      : "React"}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={[
+                    styles.messageButton,
+                    startingDm && styles.messageButtonDisabled,
+                  ]}
+                  onPress={() => void handleMessagePress()}
+                  disabled={startingDm}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Message post creator"
+                >
+                  {startingDm ? (
+                    <ActivityIndicator size="small" color="#000000" />
+                  ) : (
+                    <Ionicons
+                      name="chatbubble-ellipses"
+                      size={18}
+                      color="#000000"
+                    />
+                  )}
+                  <Text style={styles.messageLabel}>
+                    {startingDm ? "Opening" : "Message"}
+                  </Text>
+                </Pressable>
+              </View>
 
               <Pressable
                 style={styles.echoButton}
@@ -553,7 +610,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    flexWrap: "wrap",
     gap: 12,
+  },
+  primaryActionGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+    flexShrink: 1,
   },
   reactionSummary: {
     flexDirection: "row",
@@ -621,6 +686,26 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+  },
+  messageButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    minHeight: 40,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  messageButtonDisabled: {
+    opacity: 0.65,
+  },
+  messageLabel: {
+    color: "#000000",
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "800",
   },
   echoLabel: {
     color: "#4A4A4A",
