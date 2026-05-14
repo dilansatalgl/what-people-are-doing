@@ -86,6 +86,13 @@ export default function PostHistoryScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { leftColumn, rightColumn } = buildMasonryColumns(posts);
 
+  const handleOpenPost = useCallback((post: FeedPost) => {
+    router.push({
+      pathname: "/posts/[postId]" as any,
+      params: { postId: post.id, post: JSON.stringify(post) },
+    });
+  }, []);
+
   const loadHistory = useCallback(async () => {
     try {
       setLoading(true);
@@ -210,7 +217,7 @@ export default function PostHistoryScreen() {
             <View style={styles.masonryColumn}>
               {leftColumn.map((post) => (
                 <View key={post.id} style={styles.masonryItem}>
-                  <PostCard post={post} />
+                  <PostCard post={post} onPress={handleOpenPost} />
                 </View>
               ))}
             </View>
@@ -218,7 +225,7 @@ export default function PostHistoryScreen() {
             <View style={styles.masonryColumn}>
               {rightColumn.map((post) => (
                 <View key={post.id} style={styles.masonryItem}>
-                  <PostCard post={post} />
+                  <PostCard post={post} onPress={handleOpenPost} />
                 </View>
               ))}
             </View>
