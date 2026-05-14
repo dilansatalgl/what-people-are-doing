@@ -316,6 +316,15 @@ export default function AccountScreen() {
                   <Pressable style={styles.primaryButton} onPress={handleStartEdit}>
                     <Text style={styles.primaryButtonText}>Edit Profile</Text>
                   </Pressable>
+
+                  <Pressable
+                    style={styles.secondaryButton}
+                    onPress={() => router.push("/post-history")}
+                  >
+                    <Text style={styles.secondaryButtonText}>
+                      See Post History
+                    </Text>
+                  </Pressable>
                 </>
               ) : (
                 <>
