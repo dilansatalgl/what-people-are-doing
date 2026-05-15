@@ -1,32 +1,9 @@
-const Echo = require("../models/Echo");
-const Post = require("../models/Post");
 const postExpiration = require("../config/postExpiration");
 
-const deleteExpiredPosts = async (now = new Date()) => {
-  let deletedPosts = 0;
-  let deletedEchoes = 0;
-
-  const expiredPosts = await Post.find({
-    expiresAt: { $lte: now },
-  }).select("_id");
-
-  if (expiredPosts.length > 0) {
-    const expiredPostIds = expiredPosts.map(({ _id }) => _id);
-
-    const echoDeletionResult = await Echo.deleteMany({
-      post: { $in: expiredPostIds },
-    });
-    const postDeletionResult = await Post.deleteMany({
-      _id: { $in: expiredPostIds },
-    });
-
-    deletedEchoes += echoDeletionResult.deletedCount || 0;
-    deletedPosts += postDeletionResult.deletedCount || 0;
-  }
-
+const deleteExpiredPosts = async () => {
   return {
-    deletedPosts,
-    deletedEchoes,
+    deletedPosts: 0,
+    deletedEchoes: 0,
   };
 };
 

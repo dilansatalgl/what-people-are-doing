@@ -1,11 +1,35 @@
 const Echo = require("../models/Echo");
 const Post = require("../models/Post");
+const { REACTION_TYPES } = require("../models/Reaction");
 const User = require("../models/User");
 const reverseGeocode = require("../utils/reverseGeocode");
 
 const POST_COOLDOWN_MINUTES = 10;
 const POST_COOLDOWN_MS = POST_COOLDOWN_MINUTES * 60 * 1000;
 
+const buildReactionCounts = (stored) => {
+  const counts = {};
+  for (const type of REACTION_TYPES) {
+    counts[type] = Math.max(0, stored?.[type] ?? 0);
+  }
+  return counts;
+};
+
+const formatPostHistoryItem = (post, now = new Date()) => ({
+  postId: post._id,
+  text: post.text,
+  image: post.image,
+  locationName: post.location?.name || null,
+  coordinates: {
+    longitude: post.location?.coordinates?.[0] ?? null,
+    latitude: post.location?.coordinates?.[1] ?? null,
+  },
+  createdAt: post.createdAt,
+  expiresAt: post.expiresAt,
+  isActive: post.expiresAt > now,
+  echoCount: post.echoCount ?? 0,
+  reactionCounts: buildReactionCounts(post.reactionCounts),
+});
 
 const createPost = async (req, res) => {
   try {
@@ -96,6 +120,29 @@ const createPost = async (req, res) => {
   }
 };
 
+const getMyPostHistory = async (req, res) => {
+  try {
+    const now = new Date();
+    const posts = await Post.find({
+      user: req.user.userId,
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      count: posts.length,
+      posts: posts.map((post) => formatPostHistoryItem(post, now)),
+    });
+  } catch (error) {
+    console.error("Get post history error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load post history.",
+    });
+  }
+};
+
 const deletePost = async (req, res) => {
   try {
     const { postId } = req.params;
@@ -129,5 +176,6 @@ const deletePost = async (req, res) => {
 
 module.exports = {
   createPost,
+  getMyPostHistory,
   deletePost,
 };

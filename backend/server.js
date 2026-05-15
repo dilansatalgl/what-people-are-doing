@@ -5,7 +5,6 @@ const connectDB = require("./config/db");
 const cors = require("cors");
 
 const authRoutes = require("./routes/authRoutes");
-const { startPostCleanupJob } = require("./services/postCleanupService");
 const userRoutes = require("./routes/userRoutes");
 const postRoutes = require("./routes/postRoutes");
 const heatmapRoutes = require("./routes/heatmapRoutes");
@@ -47,7 +46,6 @@ app.get("/", (req, res) => {
 
 const startServer = async () => {
   await connectDB();
-  startPostCleanupJob();
 
   return app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);

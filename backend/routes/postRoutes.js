@@ -2,7 +2,11 @@ const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 
-const { createPost, deletePost } = require("../controllers/postController");
+const {
+  createPost,
+  deletePost,
+  getMyPostHistory,
+} = require("../controllers/postController");
 const { echoPost, unechoPost } = require("../controllers/echoController");
 const { setReaction, removeReaction } = require("../controllers/reactionController");
 const authMiddleware = require("../middleware/authMiddleware");
@@ -43,5 +47,6 @@ router.put("/:postId/reaction", authMiddleware, reactionRateLimiter, setReaction
 router.delete("/:postId/reaction", authMiddleware, reactionRateLimiter, removeReaction);
 router.get("/feed", authMiddleware, feedRateLimiter, getRandomFeed);
 router.get("/feed/nearby", authMiddleware, feedRateLimiter, getNearbyFeed);
+router.get("/history", authMiddleware, getMyPostHistory);
 
 module.exports = router;
